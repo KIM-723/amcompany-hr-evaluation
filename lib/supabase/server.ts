@@ -1,10 +1,10 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 type CookieToSet = {
   name: string;
   value: string;
-  options?: Parameters<Awaited<ReturnType<typeof cookies>>['set']>[2];
+  options?: CookieOptions;
 };
 
 export async function createClient() {
@@ -26,7 +26,8 @@ export async function createClient() {
             cookieStore.set(name, value, options);
           });
         } catch {
-          // Server Components에서는 쿠키 쓰기가 불가능한 경우가 있음
+          // Server Component에서 쿠키 쓰기가 허용되지 않는 경우는 무시합니다.
+          // 실제 세션 갱신은 STEP 4의 middleware/auth flow에서 처리합니다.
         }
       },
     },

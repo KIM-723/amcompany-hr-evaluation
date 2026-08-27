@@ -59,3 +59,16 @@ GitHub Repository를 Import한 뒤 위 환경변수의 Production 값을 등록�
 npm run typecheck
 npm run build
 ```
+
+## STEP 1 — IA & Project Structure
+
+STEP 1의 화면 구조, Role별 Flow, 접근 원칙은 [`docs/IA.md`](docs/IA.md)를 기준으로 한다.
+
+주요 코드 기준:
+
+- `config/navigation.ts`: Sidebar IA와 Role별 메뉴 정의
+- `config/ia.ts`: 화면별 URL, 사용자, 목적, 기능, 필요 데이터, Action, 접근권한
+- `lib/permissions/route-access.ts`: 향후 STEP 4 Route Guard에 사용할 접근 판단 유틸리티
+- `docs/STEP_01_REPORT.md`: STEP 1 완료 보고
+
+현재 단계의 권한 정의는 설계 기준이며 실제 보안 통제는 아니다. 인증, 서버 접근통제, Supabase RLS는 STEP 4에서 구현한다.
