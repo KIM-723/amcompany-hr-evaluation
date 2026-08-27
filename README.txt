@@ -1,7 +1,3 @@
-AMCOMPANY demo-setup route hotfix
-
-1. GitHub 저장소의 루트 middleware.ts를 이 파일로 교체합니다.
-2. Commit changes 합니다.
-3. Vercel 새 배포가 Ready가 된 뒤 /demo-setup 접속을 확인합니다.
-
-이 패치는 /login, /demo-setup, /env-check, /forbidden 경로를 Middleware matcher에서 완전히 제외합니다.
+GitHub 저장소 최상위에 middleware.ts를 업로드하여 기존 파일을 교체하세요.
+docs 폴더는 선택적으로 함께 업로드할 수 있습니다.
+Commit 예시: fix: force public access to demo setup
