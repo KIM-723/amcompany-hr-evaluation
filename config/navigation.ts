@@ -93,6 +93,7 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
     children: [
       { label: '조직 Tree', href: '/organization', roles: MANAGEMENT_ROLES },
       { label: '직급관리', href: '/organization/job-levels', roles: MANAGEMENT_ROLES },
+      { label: '직책관리', href: '/organization/positions', roles: MANAGEMENT_ROLES },
     ],
   },
   {

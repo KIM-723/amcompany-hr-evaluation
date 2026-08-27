@@ -51,3 +51,8 @@ Vercel 환경변수 설정 후 `/demo-setup` 접속 → `DEMO_SETUP_SECRET` 입�
 로 변경합니다.
 
 상세 권한 구조: `docs/AUTH_RLS.md`
+
+
+## STEP 5 — 직원 및 조직관리
+
+직원 목록/검색/필터/등록/수정/재직상태 변경과 부서 조직 Tree, 직급/직책 Master CRUD를 Supabase 실제 DB에 연결했습니다. 적용 SQL은 `supabase/migrations/005_step5_employee_org_management.sql`이며 검증 SQL은 `006_step5_validation.sql`입니다. 상세 적용 순서는 `docs/STEP_05_APPLY.md`를 참고하세요.

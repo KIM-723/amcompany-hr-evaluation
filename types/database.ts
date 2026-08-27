@@ -59,3 +59,22 @@ export interface EvaluationResultRecord {
   created_at: ISODateTime;
   updated_at: ISODateTime;
 }
+
+export interface EmployeeMasterRecord {
+  id: UUID;
+  user_id: UUID | null;
+  employee_no: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  hire_date: ISODate;
+  resignation_date: ISODate | null;
+  employment_status: EmploymentStatus;
+  employment_type: string;
+  department_id: UUID | null;
+  job_level_id: UUID | null;
+  position_id: UUID | null;
+  leader_id: UUID | null;
+  is_leader: boolean;
+  notes: string | null;
+}

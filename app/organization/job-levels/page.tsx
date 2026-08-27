@@ -1,20 +1,14 @@
-import { FeaturePlaceholder } from '@/components/ui/FeaturePlaceholder';
+import Link from 'next/link';
+import { PageShell } from '@/components/ui/PageShell';
+import { Card } from '@/components/ui/Card';
+import { Notice } from '@/components/hr/Notice';
+import { createJobLevel, setJobLevelActive } from '@/app/organization/actions';
+import { requireHrAdmin } from '@/lib/hr/admin';
+import { stringParam } from '@/lib/hr/utils';
 
-export default function JobLevelsPage() {
-  return (
-    <FeaturePlaceholder
-      title="직급관리"
-      description="직급을 하드코딩하지 않고 관리자가 추가·수정·정렬·비활성화할 수 있도록 설계된 관리 화면입니다."
-      step="STEP 5 예정"
-      backHref="/organization"
-      plannedFeatures={[
-        '직급 목록',
-        '직급 추가',
-        '직급명 수정',
-        '표시 순서 변경',
-        '비활성화',
-        '평가문항 적용 기준 연결',
-      ]}
-    />
-  );
+type SearchParams = Promise<Record<string,string|string[]|undefined>>;
+export default async function JobLevelsPage({ searchParams }: { searchParams:SearchParams }) {
+ const sp=await searchParams; const {supabase}=await requireHrAdmin(); const {data}=await supabase.from('job_levels').select('id,name,code,level_order,description,is_active').order('level_order');
+ const rows=(data??[]) as {id:string;name:string;code:string|null;level_order:number;description:string|null;is_active:boolean}[];
+ return <PageShell title="직급관리" description="직급은 하드코딩하지 않고 DB에서 추가·수정·정렬·비활성화합니다."><Notice success={stringParam(sp.success)} error={stringParam(sp.error)}/><div className="grid gap-6 xl:grid-cols-[1fr_360px]"><Card className="overflow-x-auto p-0"><table className="w-full text-sm"><thead className="bg-slate-50 text-left text-xs text-slate-500"><tr><th className="px-4 py-3">순서</th><th className="px-4 py-3">직급</th><th className="px-4 py-3">코드</th><th className="px-4 py-3">상태</th><th className="px-4 py-3"></th></tr></thead><tbody>{rows.map((x)=>{const action=setJobLevelActive.bind(null,x.id,!x.is_active);return <tr key={x.id} className="border-t"><td className="px-4 py-3">{x.level_order}</td><td className="px-4 py-3 font-semibold">{x.name}</td><td className="px-4 py-3">{x.code??'-'}</td><td className="px-4 py-3">{x.is_active?'활성':'비활성'}</td><td className="px-4 py-3 text-right"><div className="flex justify-end gap-2"><Link href={`/organization/job-levels/${x.id}`} className="rounded-lg border px-3 py-1.5 text-xs">수정</Link><form action={action}><button className="rounded-lg border px-3 py-1.5 text-xs">{x.is_active?'비활성화':'활성화'}</button></form></div></td></tr>})}</tbody></table></Card><Card><h2 className="font-bold">새 직급</h2><form action={createJobLevel} className="mt-4 space-y-3"><label className="block text-sm">직급명 *<input name="name" required className="mt-1 w-full rounded-xl border px-3 py-2.5"/></label><label className="block text-sm">코드<input name="code" className="mt-1 w-full rounded-xl border px-3 py-2.5"/></label><label className="block text-sm">순서 *<input name="level_order" type="number" required defaultValue={rows.length+1} className="mt-1 w-full rounded-xl border px-3 py-2.5"/></label><label className="block text-sm">설명<textarea name="description" rows={3} className="mt-1 w-full rounded-xl border px-3 py-2.5"/></label><button className="w-full rounded-xl bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white">직급 등록</button></form></Card></div></PageShell>
 }
