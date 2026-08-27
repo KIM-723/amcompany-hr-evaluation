@@ -5,16 +5,10 @@ import { rolesCanAccessRoute } from '@/lib/permissions/route-access';
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
-const PUBLIC_PATHS = ['/login', '/demo-setup', '/forbidden', '/env-check'];
-
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-}
-
 function isValidSupabaseUrl(value: string | undefined): value is string {
   if (!value) return false;
   try {
-    const url = new URL(value);
+    const url = new URL(value.trim());
     return url.protocol === 'https:' || url.protocol === 'http:';
   } catch {
     return false;
@@ -42,11 +36,6 @@ function redirectToLogin(request: NextRequest, reason?: string) {
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-
-  if (isPublicPath(pathname)) {
-    return NextResponse.next();
-  }
-
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const supabaseKey = getPublicKey();
 
@@ -109,5 +98,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api/).*)'],
+  // 로그인/데모 설정/환경 점검/403/API/정적 파일은 Middleware 자체를 전혀 실행하지 않는다.
+  matcher: [
+    '/((?!login(?:/|$)|demo-setup(?:/|$)|env-check(?:/|$)|forbidden(?:/|$)|api(?:/|$)|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };

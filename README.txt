@@ -1,5 +1,7 @@
-AMCOMPANY 로그인 런타임 환경변수 패치
+AMCOMPANY demo-setup route hotfix
 
-GitHub 저장소 루트에서 Add file -> Upload files로 app, docs 폴더를 업로드하세요.
-기존 app/login/page.tsx 및 app/login/LoginForm.tsx는 이 버전으로 갱신됩니다.
-Commit 후 Vercel 자동 배포가 Ready가 되면 /login에서 다시 로그인하세요.
+1. GitHub 저장소의 루트 middleware.ts를 이 파일로 교체합니다.
+2. Commit changes 합니다.
+3. Vercel 새 배포가 Ready가 된 뒤 /demo-setup 접속을 확인합니다.
+
+이 패치는 /login, /demo-setup, /env-check, /forbidden 경로를 Middleware matcher에서 완전히 제외합니다.
