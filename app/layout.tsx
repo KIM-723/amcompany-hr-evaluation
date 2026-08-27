@@ -1,5 +1,31 @@
 import './globals.css';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
-export const metadata={title:'AMCOMPANY 인사진단',description:'AMCOMPANY HR Evaluation System'};
-export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="ko"><body><Sidebar/><div className="ml-64 min-h-screen"><Header/><main className="p-8">{children}</main></div></body></html>}
+import { getCurrentUserContext } from '@/lib/auth/user-context';
+
+export const metadata = {
+  title: 'AMCOMPANY 인사진단',
+  description: 'AMCOMPANY HR Evaluation System',
+};
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUserContext();
+
+  return (
+    <html lang="ko">
+      <body>
+        {user ? (
+          <>
+            <Sidebar roles={user.roles} />
+            <div className="ml-64 min-h-screen">
+              <Header user={user} />
+              <main className="p-8">{children}</main>
+            </div>
+          </>
+        ) : (
+          children
+        )}
+      </body>
+    </html>
+  );
+}

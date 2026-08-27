@@ -1,92 +1,53 @@
 # AMCOMPANY 인사진단 웹시스템
 
-업무 관찰 → 근거 기록 → 평가 → 진단 → 피드백 → 성장계획을 연결하는 AMCOMPANY용 HR Evaluation System입니다.
+Next.js + TypeScript + Tailwind CSS + Supabase 기반 AMCOMPANY 인사진단 시스템입니다.
 
-## Stack
-- Next.js + App Router
-- TypeScript
-- Tailwind CSS
-- Supabase PostgreSQL / Auth / RLS
-- Vercel
+현재 개발단계: **STEP 4 · 로그인 및 권한관리**
 
-## 주요 메뉴
-Dashboard, 인사진단, 관찰일지, 직원관리, 조직관리, 평가기간, 평가문항, Calibration, 9-Block, 성장계획, 통계, 설정
+## 현재 구현
 
-## 로컬 실행
-```bash
-cp .env.example .env.local
-npm install
-npm run dev
-```
-
-## Supabase
-1. Supabase 프로젝트를 생성합니다.
-2. `supabase/migrations/001_initial_schema.sql`을 적용합니다.
-3. 개발 샘플이 필요하면 `supabase/seed/001_demo_seed.sql`을 적용합니다.
-4. Supabase Auth 사용자 생성 후 `employees.user_id`를 연결합니다.
+- 전체 IA / Role별 Flow / Route 구조
+- Supabase PostgreSQL Schema / Snapshot / History
+- 38명 개발용 Sample Data
+- Supabase Auth 로그인/로그아웃/세션 유지
+- Role별 Sidebar
+- Middleware URL 접근통제
+- PostgreSQL RLS 권한통제
+- 리더 조직 Scope
+- 개발용 Demo Auth 계정 생성/삭제
 
 ## 환경변수
+
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_DEMO_MODE=true
-```
-`SUPABASE_SERVICE_ROLE_KEY`는 서버 전용이며 브라우저 코드에 노출하지 않습니다.
-
-## 평가 데이터 원칙
-- 평가 시작 시 직원·조직·평가자·문항 기준을 JSON Snapshot으로 보존
-- 평가 변경은 `evaluation_history`에 이력 보존
-- 점수 Calibration은 기존/변경 점수, 변경자, 사유 보존
-- 관찰일지와 평가응답은 `evaluation_evidence_links`로 연결
-- 자기평가는 최종점수와 분리
-
-## GitHub
-```bash
-git init
-git add .
-git commit -m "feat: initialize AMCOMPANY HR evaluation system"
-git branch -M main
-git remote add origin <GITHUB_REPOSITORY_URL>
-git push -u origin main
+DEMO_SETUP_ENABLED=true
+DEMO_SETUP_SECRET=change-this-to-a-long-random-secret
 ```
 
-## Vercel
-GitHub Repository를 Import한 뒤 위 환경변수의 Production 값을 등록합니다. `main` branch push 시 자동 Build/Deploy됩니다.
+Service Role Key와 Demo Setup Secret은 GitHub에 입력하지 말고 Vercel Environment Variables에만 저장합니다.
 
-## 검증
-```bash
-npm run typecheck
-npm run build
-```
+## Migration 적용 순서
 
-## STEP 1 — IA & Project Structure
+1. `supabase/migrations/001_initial_schema.sql`
+2. `supabase/migrations/002_step2_schema_hardening.sql`
+3. `supabase/seed/002_step3_sample_data.sql`
+4. `supabase/migrations/003_step4_auth_rls.sql`
+5. `supabase/migrations/004_step4_validation.sql` (검증용)
 
-STEP 1의 화면 구조, Role별 Flow, 접근 원칙은 [`docs/IA.md`](docs/IA.md)를 기준으로 한다.
+## Demo Auth 계정 만들기
 
-주요 코드 기준:
+Vercel 환경변수 설정 후 `/demo-setup` 접속 → `DEMO_SETUP_SECRET` 입력 → Demo 계정 생성.
 
-- `config/navigation.ts`: Sidebar IA와 Role별 메뉴 정의
-- `config/ia.ts`: 화면별 URL, 사용자, 목적, 기능, 필요 데이터, Action, 접근권한
-- `lib/permissions/route-access.ts`: 향후 STEP 4 Route Guard에 사용할 접근 판단 유틸리티
-- `docs/STEP_01_REPORT.md`: STEP 1 완료 보고
+공통 비밀번호는 개발환경에서 `Amcompany!2026`입니다.
 
-현재 단계의 권한 정의는 설계 기준이며 실제 보안 통제는 아니다. 인증, 서버 접근통제, Supabase RLS는 STEP 4에서 구현한다.
+테스트 종료 후 `/demo-setup`에서 계정을 삭제하고:
 
-## STEP 2 — Database Schema & ERD
+- `DEMO_SETUP_ENABLED=false`
+- `NEXT_PUBLIC_DEMO_MODE=false`
 
-STEP 2 Database 설계 문서와 Migration:
+로 변경합니다.
 
-- `docs/ERD.md`: 전체 관계 ERD
-- `docs/DATABASE_SCHEMA.md`: Table 역할 / Snapshot / History / RLS 설계
-- `docs/STEP_02_REPORT.md`: STEP 2 완료 보고
-- `supabase/migrations/002_step2_schema_hardening.sql`: STEP 2 Migration
-
-Migration 적용 순서:
-
-```text
-001_initial_schema.sql
-→ 002_step2_schema_hardening.sql
-```
-
-STEP 2에서는 Sample Data를 넣지 않는다. Seed는 STEP 3에서 적용한다.
+상세 권한 구조: `docs/AUTH_RLS.md`

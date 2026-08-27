@@ -16,7 +16,9 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
-import { NAVIGATION_ITEMS, type NavigationIconKey } from '@/config/navigation';
+import { type NavigationIconKey } from '@/config/navigation';
+import { getNavigationForRoles } from '@/lib/permissions/route-access';
+import type { Role } from '@/types';
 
 const iconMap = {
   dashboard: LayoutDashboard,
@@ -37,8 +39,9 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function Sidebar() {
+export function Sidebar({ roles }: { roles: Role[] }) {
   const pathname = usePathname();
+  const items = getNavigationForRoles(roles);
 
   return (
     <aside className="fixed inset-y-0 left-0 w-64 overflow-y-auto bg-navy-950 px-4 py-6 text-white">
@@ -48,7 +51,7 @@ export function Sidebar() {
       </div>
 
       <nav className="mt-8 space-y-1">
-        {NAVIGATION_ITEMS.map((item) => {
+        {items.map((item) => {
           const Icon = iconMap[item.icon];
           const active = isActive(pathname, item.href);
 
@@ -92,7 +95,7 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-3 text-[11px] leading-5 text-slate-300">
-        STEP 1에서는 전체 IA를 표시합니다. Role별 실제 메뉴 필터링과 접근 차단은 STEP 4에서 적용합니다.
+        메뉴는 로그인 계정의 Role에 따라 자동으로 제한됩니다. URL 직접 접근도 Middleware와 Supabase RLS에서 재검증합니다.
       </div>
     </aside>
   );
