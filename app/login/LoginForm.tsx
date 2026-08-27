@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { createClient, getBrowserSupabaseConfigStatus } from '@/lib/supabase/client';
+import { FormEvent, useMemo, useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 
 const DEMO_ACCOUNTS = [
   ['직원', 'employee@amcompany.demo'],
@@ -14,23 +14,45 @@ const DEMO_ACCOUNTS = [
 
 const DEMO_PASSWORD = 'Amcompany!2026';
 
-export function LoginForm({ demoMode }: { demoMode: boolean }) {
+function isValidHttpUrl(value: string) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+type LoginFormProps = {
+  demoMode: boolean;
+  supabaseUrl: string;
+  supabaseKey: string;
+};
+
+export function LoginForm({ demoMode, supabaseUrl, supabaseKey }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const configStatus = useMemo(
+    () => ({
+      hasUrl: isValidHttpUrl(supabaseUrl),
+      hasKey: Boolean(supabaseKey),
+    }),
+    [supabaseKey, supabaseUrl],
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     setLoading(true);
 
-    const supabase = createClient();
-    if (!supabase) {
-      const status = getBrowserSupabaseConfigStatus();
-      if (!status.hasUrl && !status.hasKey) {
+    if (!configStatus.hasUrl || !configStatus.hasKey) {
+      if (!configStatus.hasUrl && !configStatus.hasKey) {
         setError('Supabase URL과 Publishable/Anon Key가 연결되지 않았습니다.');
-      } else if (!status.hasUrl) {
+      } else if (!configStatus.hasUrl) {
         setError('NEXT_PUBLIC_SUPABASE_URL을 확인해주세요.');
       } else {
         setError('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 또는 NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인해주세요.');
@@ -39,14 +61,21 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
       return;
     }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) {
-      setError('이메일 또는 비밀번호를 확인해주세요.');
-      setLoading(false);
-      return;
-    }
+    try {
+      const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
-    window.location.assign('/dashboard');
+      if (signInError) {
+        setError(`로그인 실패: ${signInError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      window.location.assign('/dashboard');
+    } catch (loginError) {
+      setError(loginError instanceof Error ? `로그인 오류: ${loginError.message}` : '로그인 중 오류가 발생했습니다.');
+      setLoading(false);
+    }
   }
 
   function chooseDemo(demoEmail: string) {
