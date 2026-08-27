@@ -5,7 +5,7 @@ import { rolesCanAccessRoute } from '@/lib/permissions/route-access';
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
-const PUBLIC_PATHS = ['/login', '/demo-setup', '/forbidden'];
+const PUBLIC_PATHS = ['/login', '/demo-setup', '/forbidden', '/env-check'];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -19,6 +19,14 @@ function isValidSupabaseUrl(value: string | undefined): value is string {
   } catch {
     return false;
   }
+}
+
+function getPublicKey() {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    undefined
+  );
 }
 
 function copyCookies(from: NextResponse, to: NextResponse) {
@@ -35,23 +43,21 @@ function redirectToLogin(request: NextRequest, reason?: string) {
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // 로그인/데모설정/403 화면은 인증 미들웨어를 거치지 않게 하여
-  // 환경변수 오류가 있더라도 해당 화면 자체는 항상 열리도록 합니다.
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseKey = getPublicKey();
 
-  if (!isValidSupabaseUrl(supabaseUrl) || !supabaseAnonKey?.trim()) {
+  if (!isValidSupabaseUrl(supabaseUrl) || !supabaseKey) {
     return redirectToLogin(request, 'supabase-config');
   }
 
   try {
     let response = NextResponse.next({ request });
 
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, getBrowserSupabaseConfigStatus } from '@/lib/supabase/client';
 
 const DEMO_ACCOUNTS = [
   ['직원', 'employee@amcompany.demo'],
@@ -27,7 +27,14 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
 
     const supabase = createClient();
     if (!supabase) {
-      setError('Supabase 환경변수가 연결되지 않았습니다.');
+      const status = getBrowserSupabaseConfigStatus();
+      if (!status.hasUrl && !status.hasKey) {
+        setError('Supabase URL과 Publishable/Anon Key가 연결되지 않았습니다.');
+      } else if (!status.hasUrl) {
+        setError('NEXT_PUBLIC_SUPABASE_URL을 확인해주세요.');
+      } else {
+        setError('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 또는 NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인해주세요.');
+      }
       setLoading(false);
       return;
     }
