@@ -1,0 +1,2 @@
+import { DataTable, PageShell, Toolbar } from '@/components/ui/PageShell';
+export default function Page(){return <PageShell title="성장계획" description="평가의 성장 필요 항목을 다음 기간의 구체적인 행동계획으로 연결합니다."><Toolbar/><DataTable headers={['대상자','개선 역량','현재 → 기대','행동','중간점검','완료예정','상태']} rows={[["케네스","업무지시 명확성","2.8 → 3.5","지시 전 목적·완료기준 명시","2026-11-15","2027-01-31","진행중"],["앤","데이터 기반 기획","3.0 → 3.8","주간 지표 리뷰 후 기획안 반영","2026-11-30","2027-02-28","계획"]]}/></PageShell>}

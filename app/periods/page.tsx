@@ -1,0 +1,2 @@
+import { DataTable, PageShell, Toolbar } from '@/components/ui/PageShell';
+export default function Page(){return <PageShell title="평가기간" description="자기평가, 1차·2차 평가, Calibration과 결과 공개 일정을 운영합니다."><Toolbar/><DataTable headers={['평가기간','전체기간','자기평가','1차 평가','2차 평가','상태']} rows={[["2026 하반기","2026-09-01 ~ 2026-10-15","09/01 ~ 09/10","09/11 ~ 09/22","09/23 ~ 09/30","진행예정"],["2026 상반기","2026-03-01 ~ 2026-04-15","완료","완료","완료","종료"]]}/></PageShell>}
