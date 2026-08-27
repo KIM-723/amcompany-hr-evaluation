@@ -8,17 +8,9 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
 const PUBLIC_PATHS = ['/login', '/demo-setup', '/env-check', '/forbidden'];
 
 function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-}
-
-function isValidSupabaseUrl(value: string | undefined): value is string {
-  if (!value) return false;
-  try {
-    const url = new URL(value.trim());
-    return url.protocol === 'https:' || url.protocol === 'http:';
-  } catch {
-    return false;
-  }
+  return PUBLIC_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
 }
 
 function getPublicKey() {
@@ -43,7 +35,20 @@ function redirectToLogin(request: NextRequest, reason?: string) {
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // 가장 중요: 개발용 공개 화면/API는 인증/환경변수 검사보다 먼저 무조건 통과시킨다.
+  // 개발용 강제 로그인 모드:
+  // Supabase Auth 세션 없이도 시스템 UI에 HR 관리자 권한으로 진입한다.
+  if (process.env.FORCE_DEMO_LOGIN === 'true') {
+    if (
+      pathname === '/' ||
+      pathname === '/login' ||
+      pathname === '/demo-setup'
+    ) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
+    return NextResponse.next();
+  }
+
   if (
     isPublicPath(pathname) ||
     pathname === '/api/demo-setup' ||
@@ -55,7 +60,7 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const supabaseKey = getPublicKey();
 
-  if (!isValidSupabaseUrl(supabaseUrl) || !supabaseKey) {
+  if (!supabaseUrl || !supabaseKey) {
     return redirectToLogin(request, 'supabase-config');
   }
 
@@ -92,7 +97,8 @@ export async function middleware(request: NextRequest) {
       return copyCookies(response, redirect);
     }
 
-    const { data: roleData, error: roleError } = await supabase.rpc('current_role_codes');
+    const { data: roleData, error: roleError } =
+      await supabase.rpc('current_role_codes');
 
     if (roleError) {
       const redirect = NextResponse.redirect(new URL('/forbidden', request.url));

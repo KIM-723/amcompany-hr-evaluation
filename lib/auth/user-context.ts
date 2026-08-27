@@ -20,7 +20,31 @@ function firstName(value: { name: string } | { name: string }[] | null): string 
   return value.name;
 }
 
+function getForcedDemoContext(): CurrentUserContext {
+  const roles = ['hr_admin', 'employee'] as const;
+
+  return {
+    userId: 'forced-demo-hr',
+    email: 'hr@amcompany.demo',
+    employeeId: null,
+    employeeNo: 'AM032',
+    name: 'HR 관리자',
+    departmentId: null,
+    departmentName: '경영지원',
+    jobLevelName: '마스터',
+    positionName: 'HR 관리자',
+    roles: [...roles],
+    primaryRole: 'hr_admin',
+  };
+}
+
 export async function getCurrentUserContext(): Promise<CurrentUserContext | null> {
+  // 개발용 강제 로그인 모드.
+  // Supabase Auth 세션이 없어도 HR 관리자 UI/메뉴를 사용할 수 있다.
+  if (process.env.FORCE_DEMO_LOGIN === 'true') {
+    return getForcedDemoContext();
+  }
+
   const supabase = await createClient();
   if (!supabase) return null;
 

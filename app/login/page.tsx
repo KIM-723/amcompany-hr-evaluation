@@ -1,8 +1,13 @@
+import { redirect } from 'next/navigation';
 import { LoginForm } from '@/app/login/LoginForm';
 
 export const dynamic = 'force-dynamic';
 
 export default function LoginPage() {
+  if (process.env.FORCE_DEMO_LOGIN === 'true') {
+    redirect('/dashboard');
+  }
+
   const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? '';
   const supabaseKey = (
