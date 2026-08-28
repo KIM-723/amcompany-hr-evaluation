@@ -142,6 +142,8 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     id: employee.id,
     employee_no: employee.employee_no,
     name: employee.name,
+    department_id: employee.department_id,
+    department_id: employee.department_id,
     department_name: employee.department_id ? departmentMap.get(employee.department_id) ?? '' : '',
     job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
     position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
@@ -152,6 +154,8 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     id: employee.id,
     employee_no: employee.employee_no,
     name: employee.name,
+    department_id: employee.department_id,
+    department_id: employee.department_id,
     department_name: employee.department_id ? departmentMap.get(employee.department_id) ?? '' : '',
     job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
     position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
@@ -162,6 +166,8 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     id: employee.id,
     employee_no: employee.employee_no,
     name: employee.name,
+    department_id: employee.department_id,
+    department_id: employee.department_id,
     department_name: employee.department_id ? departmentMap.get(employee.department_id) ?? '' : '',
     job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
     position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
@@ -270,8 +276,8 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
         <div className="mb-4">
           <h2 className="font-bold">평가대상 자동배정</h2>
           <p className="mt-1 text-sm text-slate-500">
-            1차 평가자인 리더를 선택하면 직원관리에서 해당 리더에게 소속된 구성원이 자동으로 조회되고 전체 체크됩니다.
-            2차 평가자는 직책관리에서 <b>2차평가 임원</b>으로 지정한 직원만 선택할 수 있습니다.
+            1차 평가자인 리더를 선택하면 <b>그 리더와 같은 부서의 재직자</b>가 자동 조회되고 전체 체크됩니다.
+            선택한 리더 본인은 제외되며, 2차 평가자는 직책관리에서 <b>2차평가 임원</b>으로 지정한 직원만 선택할 수 있습니다.
           </p>
         </div>
 
@@ -302,7 +308,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
         <div className="mb-3">
           <h2 className="text-lg font-bold">평가대상 / 평가자 지정</h2>
           <p className="mt-1 text-xs text-slate-500">
-            평가 시작 전에는 개별 수정할 수 있습니다. 1차 평가자는 대상자의 직원정보상 리더와 일치해야 합니다.
+            평가 시작 전에는 개별 수정할 수 있습니다. 1차 평가자는 대상자와 같은 부서의 리더여야 합니다.
           </p>
         </div>
 

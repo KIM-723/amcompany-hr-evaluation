@@ -8,10 +8,10 @@ type Person = {
   id: string;
   employee_no: string;
   name: string;
+  department_id: string | null;
   department_name: string;
   job_level_name: string;
   position_name: string;
-  leader_id: string | null;
 };
 
 export function EvaluatorTargetSelector({
@@ -30,16 +30,40 @@ export function EvaluatorTargetSelector({
   const [leaderId, setLeaderId] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const members = useMemo(
-    () => employees.filter((employee) => employee.leader_id === leaderId),
-    [employees, leaderId],
+  const selectedLeader = useMemo(
+    () => leaders.find((leader) => leader.id === leaderId) ?? null,
+    [leaders, leaderId],
   );
+
+  const members = useMemo(() => {
+    if (!selectedLeader?.department_id) return [];
+
+    return employees.filter(
+      (employee) =>
+        employee.department_id === selectedLeader.department_id &&
+        employee.id !== selectedLeader.id,
+    );
+  }, [employees, selectedLeader]);
 
   function selectLeader(nextLeaderId: string) {
     setLeaderId(nextLeaderId);
+
+    const leader = leaders.find((item) => item.id === nextLeaderId);
+
+    if (!leader?.department_id) {
+      setSelectedIds([]);
+      return;
+    }
+
     const memberIds = employees
-      .filter((employee) => employee.leader_id === nextLeaderId)
+      .filter(
+        (employee) =>
+          employee.department_id === leader.department_id &&
+          employee.id !== leader.id,
+      )
       .map((employee) => employee.id);
+
+    // 리더 선택 즉시 같은 부서의 미등록 재직자 전원을 자동 체크
     setSelectedIds(memberIds);
   }
 
@@ -97,12 +121,12 @@ export function EvaluatorTargetSelector({
             <option value="">리더 선택</option>
             {leaders.map((leader) => (
               <option key={leader.id} value={leader.id}>
-                {leader.employee_no} · {leader.name} · {leader.position_name || '리더'}
+                {leader.employee_no} · {leader.name} · {leader.department_name || '부서 미지정'}
               </option>
             ))}
           </select>
           <span className="mt-1 block text-xs font-normal text-slate-400">
-            리더를 선택하면 해당 리더로 지정된 구성원이 자동 조회·체크됩니다.
+            리더를 선택하면 해당 리더와 같은 부서의 재직자가 자동 조회·체크됩니다.
           </span>
         </label>
 
@@ -132,20 +156,27 @@ export function EvaluatorTargetSelector({
         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
           1차 평가자인 리더를 먼저 선택해주세요.
         </div>
+      ) : !selectedLeader?.department_id ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+          선택한 리더의 부서가 지정되어 있지 않습니다. 직원관리에서 리더의 부서를 먼저 지정해주세요.
+        </div>
       ) : members.length === 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-          선택한 리더에게 소속된 미등록 구성원이 없습니다.
-          직원관리에서 각 구성원의 <b>리더</b> 지정값을 확인해주세요.
+          <b>{selectedLeader.department_name}</b>에 추가 가능한 미등록 재직자가 없습니다.
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-3">
             <div>
-              <b>{members.length}명 조회</b>
-              <span className="ml-2 text-xs text-slate-500">
-                현재 {selectedIds.filter((id) => members.some((m) => m.id === id)).length}명 선택
-              </span>
+              <div className="font-bold">
+                {selectedLeader.department_name} · {members.length}명 조회
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                선택한 리더 본인은 제외됩니다. 현재{' '}
+                {selectedIds.filter((id) => members.some((member) => member.id === id)).length}명 선택
+              </div>
             </div>
+
             <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
               <input type="checkbox" checked={allChecked} onChange={toggleAll} />
               전체 선택
@@ -191,6 +222,7 @@ export function EvaluatorTargetSelector({
         <button
           disabled={
             !leaderId ||
+            !selectedLeader?.department_id ||
             selectedIds.length === 0 ||
             executives.length === 0
           }

@@ -1,60 +1,46 @@
-Calibration 해제/재실행 + 리더/임원 평가자 자동배정 패치
+리더 부서 기준 평가대상 자동조회 패치
 
-중요: 새 코드가 positions.evaluation_role / calibration_round 컬럼을 사용하므로 SQL 먼저 실행.
+이제 직원별 leader_id를 기준으로 조회하지 않습니다.
+
+예:
+이대상 = 국내섬유영업부 리더
+→ 이대상의 department_id 확인
+→ 국내섬유영업부 재직자 전원 조회
+→ 이대상 본인 제외
+→ 아직 해당 평가기간에 등록되지 않은 직원만 표시
+→ 전원 자동 체크
 
 [1] Supabase SQL Editor
-1. 020_calibration_round_evaluator_roles.sql
-2. 성공 후 021_calibration_evaluator_roles_validation.sql
+1. 022_department_based_first_evaluator.sql
+2. 성공 후 023_department_based_evaluator_validation.sql
 
-021에서 아래 true 확인
-- start_calibration_function
-- release_calibration_function
-- start_calibration_execute
-- release_calibration_execute
-
-그리고:
-- first_evaluator_candidates
-- second_evaluator_candidates
-
-숫자 확인.
-
-second_evaluator_candidates가 0이면
-직책관리에서 임원 직책을 '2차평가 임원'으로 지정해야 함.
+023 첫 값:
+department_evaluator_validation_function = true
 
 [2] GitHub
 ZIP 압축 해제
 GitHub -> Add file -> Upload files
-압축 내 app / components / docs / supabase 전체 업로드
+
+업로드:
+- app
+- components
+- supabase
 
 Commit:
-feat: calibration rounds and evaluator auto assignment
+fix: assign evaluation targets by leader department
 
 [3] Vercel
-자동 배포 -> Ready
+자동배포 -> Ready
 
-[4] 직책관리 확인
-/organization/positions
+[4] 테스트
+평가기간 상세 -> 평가대상 자동배정
 
-각 직책의 평가자 구분을 확인:
-- 일반
-- 1차평가 리더
-- 2차평가 임원
+1. 이대상 선택
+2. 국내섬유영업부 인원이 자동 조회되는지 확인
+3. 이대상 본인은 빠져있는지 확인
+4. 전원이 자동 체크되는지 확인
+5. 필요한 사람만 체크 해제 가능
+6. 2차평가자 임원 선택 -> 등록
 
-[5] 직원관리 확인
-각 일반 구성원의 '리더'가 실제 1차평가 리더로 지정되어 있어야 함.
-
-[6] 평가기간 테스트
-/periods -> 평가기간 상세
-
-1. 1차 평가자 리더 선택
-2. 해당 리더 소속 구성원이 자동으로 나타나는지 확인
-3. 구성원이 자동 체크되는지 확인
-4. 2차 평가자에는 임원만 나오는지 확인
-5. 평가대상 등록
-
-[7] Calibration 테스트
-진행중 -> Calibration 시작
-Calibration 상태 -> Calibration 해제
-다시 -> Calibration 2차 다시 시작
-
-기존 Calibration 점수 변경이력은 유지됨.
+주의:
+직원관리에서 리더와 구성원의 '부서'가 정확히 지정되어 있어야 합니다.

@@ -384,7 +384,7 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
   ] = await Promise.all([
     supabase
       .from('employees')
-      .select('id,is_leader,position_id,positions(evaluation_role)')
+      .select('id,is_leader,position_id,department_id,positions(evaluation_role)')
       .eq('id', firstEvaluatorId)
       .neq('employment_status', 'resigned')
       .single(),
@@ -396,7 +396,7 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       .single(),
     supabase
       .from('employees')
-      .select('id,leader_id')
+      .select('id,department_id')
       .in('id', employeeIds)
       .neq('employment_status', 'resigned'),
   ]);
@@ -437,8 +437,20 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
     );
   }
 
+  if (!firstEvaluator.department_id) {
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        '선택한 1차 평가자의 부서가 지정되어 있지 않습니다.',
+      ),
+    );
+  }
+
   const invalidTarget = (targets ?? []).find(
-    (employee) => employee.leader_id !== firstEvaluatorId,
+    (employee) =>
+      employee.id === firstEvaluatorId ||
+      employee.department_id !== firstEvaluator.department_id,
   );
 
   if (invalidTarget || (targets ?? []).length !== employeeIds.length) {
@@ -446,7 +458,7 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       messageUrl(
         `/periods/${periodId}`,
         'error',
-        '선택된 평가대상 중 해당 리더 소속이 아닌 구성원이 있습니다. 직원관리의 리더 지정값을 확인해주세요.',
+        '선택된 평가대상 중 1차 평가자와 다른 부서의 구성원이 있습니다.',
       ),
     );
   }
@@ -556,10 +568,10 @@ export async function updateAssignment(
     { data: firstEvaluator },
     { data: secondEvaluator },
   ] = await Promise.all([
-    supabase.from('employees').select('leader_id').eq('id', assignment.employee_id).single(),
+    supabase.from('employees').select('department_id').eq('id', assignment.employee_id).single(),
     supabase
       .from('employees')
-      .select('id,is_leader,positions(evaluation_role)')
+      .select('id,is_leader,department_id,positions(evaluation_role)')
       .eq('id', firstEvaluatorId)
       .single(),
     supabase
@@ -583,12 +595,17 @@ export async function updateAssignment(
     redirect(messageUrl(`/periods/${periodId}`, 'error', '1차 평가자는 리더만 지정할 수 있습니다.'));
   }
 
-  if (target?.leader_id !== firstEvaluatorId) {
+  if (
+    !target?.department_id ||
+    !firstEvaluator.department_id ||
+    target.department_id !== firstEvaluator.department_id ||
+    assignment.employee_id === firstEvaluatorId
+  ) {
     redirect(
       messageUrl(
         `/periods/${periodId}`,
         'error',
-        '선택한 1차 평가자는 해당 구성원의 직원정보상 리더와 다릅니다.',
+        '1차 평가자는 평가대상자와 같은 부서의 리더여야 합니다.',
       ),
     );
   }
