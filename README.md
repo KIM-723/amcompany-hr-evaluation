@@ -1,58 +1,70 @@
 # AMCOMPANY 인사진단 웹시스템
 
-Next.js + TypeScript + Tailwind CSS + Supabase 기반 AMCOMPANY 인사진단 시스템입니다.
+Next.js + TypeScript + Tailwind CSS + Supabase + Vercel 기반의 AMCOMPANY 맞춤형 인사진단 시스템입니다.
 
-현재 개발단계: **STEP 4 · 로그인 및 권한관리**
+## 핵심 흐름
 
-## 현재 구현
+업무 관찰 → 근거 기록 → 자기평가 → 1차 평가 → 2차 Review → Calibration → 결과 → 9-Block → 성장계획
 
-- 전체 IA / Role별 Flow / Route 구조
-- Supabase PostgreSQL Schema / Snapshot / History
-- 38명 개발용 Sample Data
-- Supabase Auth 로그인/로그아웃/세션 유지
-- Role별 Sidebar
-- Middleware URL 접근통제
-- PostgreSQL RLS 권한통제
-- 리더 조직 Scope
-- 개발용 Demo Auth 계정 생성/삭제
+## 핵심가치
+
+- 성장
+- 신뢰
+- 전문성
+- 감각
+
+## 기술스택
+
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- Supabase PostgreSQL / Auth / RLS
+- Recharts
+- xlsx
+- GitHub + Vercel
 
 ## 환경변수
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-NEXT_PUBLIC_DEMO_MODE=true
-DEMO_SETUP_ENABLED=true
-DEMO_SETUP_SECRET=change-this-to-a-long-random-secret
-```
+`.env.example` 참고.
 
-Service Role Key와 Demo Setup Secret은 GitHub에 입력하지 말고 Vercel Environment Variables에만 저장합니다.
+운영환경에서는 반드시 다음을 지킵니다.
 
-## Migration 적용 순서
-
-1. `supabase/migrations/001_initial_schema.sql`
-2. `supabase/migrations/002_step2_schema_hardening.sql`
-3. `supabase/seed/002_step3_sample_data.sql`
-4. `supabase/migrations/003_step4_auth_rls.sql`
-5. `supabase/migrations/004_step4_validation.sql` (검증용)
-
-## Demo Auth 계정 만들기
-
-Vercel 환경변수 설정 후 `/demo-setup` 접속 → `DEMO_SETUP_SECRET` 입력 → Demo 계정 생성.
-
-공통 비밀번호는 개발환경에서 `Amcompany!2026`입니다.
-
-테스트 종료 후 `/demo-setup`에서 계정을 삭제하고:
-
+- `FORCE_DEMO_LOGIN=false`
 - `DEMO_SETUP_ENABLED=false`
 - `NEXT_PUBLIC_DEMO_MODE=false`
+- `SUPABASE_SECRET_KEY` / `SUPABASE_SERVICE_ROLE_KEY`는 서버 전용
+- Secret Key에 `NEXT_PUBLIC_` 접두사 사용 금지
 
-로 변경합니다.
+## Migration
 
-상세 권한 구조: `docs/AUTH_RLS.md`
+기존 STEP 1~6 적용 후 통합 패키지에서는 순서대로 실행:
 
+1. `011_step7_12_core_evaluation.sql`
+2. `012_step13_17_analytics_growth_export.sql`
+3. `013_step18_20_security_hardening.sql`
+4. `014_step7_20_validation.sql`
 
-## STEP 5 — 직원 및 조직관리
+## 운영 전 필수검증
 
-직원 목록/검색/필터/등록/수정/재직상태 변경과 부서 조직 Tree, 직급/직책 Master CRUD를 Supabase 실제 DB에 연결했습니다. 적용 SQL은 `supabase/migrations/005_step5_employee_org_management.sql`이며 검증 SQL은 `006_step5_validation.sql`입니다. 상세 적용 순서는 `docs/STEP_05_APPLY.md`를 참고하세요.
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
+
+그리고 `/settings/security`에서 보안 상태를 확인합니다.
+
+## GitHub → Vercel
+
+GitHub main branch에 Commit하면 Vercel Production 자동 배포가 실행됩니다.
+
+## Excel
+
+`/api/export/evaluations`
+
+현재 사용자 권한 범위 내 데이터를 대상으로 6개 Sheet를 생성합니다.
+
+## 주의
+
+개발 중 `FORCE_DEMO_LOGIN=true`는 정상 Auth를 우회하기 위한 임시모드입니다.
+실제 인사데이터를 운영하기 전 반드시 정상 Supabase Auth + RLS로 전환해야 합니다.

@@ -1,20 +1,9 @@
-import { FeaturePlaceholder } from '@/components/ui/FeaturePlaceholder';
-
-export default function EvaluationResultsPage() {
-  return (
-    <FeaturePlaceholder
-      title="평가결과"
-      description="개인별 종합진단과 성과·역량·태도·핵심가치, 강점과 성장 필요영역을 확인합니다."
-      step="STEP 12 예정"
-      plannedFeatures={[
-        '종합진단',
-        '성과·역량·태도 결과',
-        '핵심가치 Radar Chart',
-        '강점 TOP3',
-        '성장 필요 TOP3',
-        '평가자 코멘트',
-        '연결된 실제 관찰사례',
-      ]}
-    />
-  );
-}
+import Link from 'next/link'; import {PageShell} from '@/components/ui/PageShell';import {Card} from '@/components/ui/Card';import {Notice} from '@/components/hr/Notice';
+import {getEvaluationAccess} from '@/lib/evaluation/access';import {stringParam} from '@/lib/hr/utils';import {finalizeResult,releaseResult} from './actions';
+type SP=Promise<Record<string,string|string[]|undefined>>;
+export default async function Results({searchParams}:{searchParams:SP}){const sp=await searchParams;const {supabase,user}=await getEvaluationAccess();const canManage=user.roles.some(r=>['hr_admin','super_admin'].includes(r));
+ const [{data:assignments},{data:results}]=await Promise.all([supabase.from('evaluation_assignments').select('id,employee_id,period_id,status').order('assigned_at',{ascending:false}),supabase.from('evaluation_results').select('*')]);
+ const empIds=[...new Set((assignments??[]).map(a=>a.employee_id))];const periodIds=[...new Set((assignments??[]).map(a=>a.period_id))];const [{data:employees},{data:periods}]=await Promise.all([empIds.length?supabase.from('employees').select('id,name,employee_no').in('id',empIds):Promise.resolve({data:[] as any[]}),periodIds.length?supabase.from('evaluation_periods').select('id,name').in('id',periodIds):Promise.resolve({data:[] as any[]})]);
+ const em=new Map<string, any>((employees??[]).map((e:any)=>[e.id,e]));const pm=new Map<string, string>((periods??[]).map((p:any)=>[p.id,p.name]));const rm=new Map<string, any>((results??[]).map((r:any)=>[r.assignment_id,r]));
+ return <PageShell title="평가결과" description="종합진단, 성과·역량·태도·핵심가치, 강점과 성장필요 항목을 확인합니다."><Notice success={stringParam(sp.success)} error={stringParam(sp.error)}/>
+ <div className="grid gap-3">{(assignments??[]).map(a=>{const r=rm.get(a.id);const e=em.get(a.employee_id);return <Card key={a.id}><div className="flex flex-wrap items-center justify-between gap-3"><div><b>{e?.employee_no} · {e?.name}</b><div className="mt-1 text-xs text-slate-500">{pm.get(a.period_id)} · {a.status}</div></div><div className="flex items-center gap-3">{r&&<div className="text-right"><div className="text-2xl font-black">{r.total_score??'-'}</div><div className="text-xs">{r.is_released?'공개됨':'비공개'}</div></div>}{canManage&&<form action={finalizeResult.bind(null,a.id)}><button className="rounded-lg border px-3 py-2 text-sm font-semibold">{r?'재계산':'결과 생성'}</button></form>}{r&&<Link href={`/evaluations/results/${r.id}`} className="rounded-lg bg-navy-900 px-3 py-2 text-sm font-semibold text-white">상세</Link>}{canManage&&r&&!r.is_released&&<form action={releaseResult.bind(null,r.id)}><button className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700">공개</button></form>}</div></div></Card>})}</div></PageShell>}

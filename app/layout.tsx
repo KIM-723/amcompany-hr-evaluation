@@ -17,14 +17,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {user ? (
           <>
             <Sidebar roles={user.roles} />
-            <div className="ml-64 min-h-screen">
+            <div className="min-h-screen lg:ml-64">
               <Header user={user} />
-              <main className="p-8">{children}</main>
+              <main className="p-4 sm:p-6 lg:p-8">{children}</main>
             </div>
           </>
-        ) : (
-          children
-        )}
+        ) : children}
       </body>
     </html>
   );

@@ -1,0 +1,49 @@
+AMCOMPANY STEP 7~20 통합 패키지 적용
+
+중요:
+한 번에 GitHub 업로드하지만 SQL은 아래 4개를 순서대로 실행합니다.
+오류가 나면 그 다음 SQL은 실행하지 않고 해당 오류부터 수정합니다.
+
+[1] GitHub
+ZIP 압축 해제 -> 저장소 Add file -> Upload files
+압축 내부의 모든 파일/폴더를 저장소 루트에 업로드
+Commit:
+STEP 7-20 - complete HR evaluation features
+
+[2] Supabase SQL Editor
+순서대로 실행
+
+1. supabase/migrations/011_step7_12_core_evaluation.sql
+2. supabase/migrations/012_step13_17_analytics_growth_export.sql
+3. supabase/migrations/013_step18_20_security_hardening.sql
+4. supabase/migrations/014_step7_20_validation.sql
+
+014 결과에서 execute / privilege 값이 true인지 확인.
+
+[3] Vercel
+GitHub Commit 후 자동배포 -> Ready 확인.
+
+[4] 빠른 기능 확인
+/questions
+/observations
+/evaluations/self
+/evaluations/first
+/evaluations/second
+/evaluations/results
+/calibration
+/nine-block
+/growth-plans
+/dashboard
+/settings/security
+/api/export/evaluations
+
+[5] 운영 전 필수
+현재 개발용 FORCE_DEMO_LOGIN=true를 사용한다면 기능검증은 가능하지만
+실제 보안 완료가 아닙니다.
+
+실제 운영 전에:
+FORCE_DEMO_LOGIN=false
+DEMO_SETUP_ENABLED=false
+NEXT_PUBLIC_DEMO_MODE=false
+
+로 변경하고 직원/1차/2차/리더/HR/최고관리자 계정별 RLS 테스트를 다시 해야 합니다.

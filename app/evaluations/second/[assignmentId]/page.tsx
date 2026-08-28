@@ -1,0 +1,16 @@
+import {notFound} from 'next/navigation'; import {PageShell} from '@/components/ui/PageShell'; import {Card} from '@/components/ui/Card'; import {Notice} from '@/components/hr/Notice';
+import {getEvaluationAccess} from '@/lib/evaluation/access'; import {stringParam} from '@/lib/hr/utils'; import {reviewFirstEvaluation} from '../actions';
+type Props={params:Promise<{assignmentId:string}>;searchParams:Promise<Record<string,string|string[]|undefined>>};
+export default async function ReviewDetail({params,searchParams}:Props){
+ const {assignmentId}=await params;const sp=await searchParams;const {supabase}=await getEvaluationAccess();
+ const {data:assignment}=await supabase.from('evaluation_assignments').select('*').eq('id',assignmentId).single();if(!assignment)notFound();
+ const [{data:employee},{data:evaluation}]=await Promise.all([supabase.from('employees').select('name,employee_no').eq('id',assignment.employee_id).single(),supabase.from('evaluations').select('*').eq('assignment_id',assignmentId).eq('stage','first').maybeSingle()]);
+ if(!evaluation)return <PageShell title="2차 Review" description=""><Card>제출된 1차 평가가 없습니다.</Card></PageShell>;
+ const [{data:responses},{data:reviews}]=await Promise.all([supabase.from('evaluation_responses').select('*').eq('evaluation_id',evaluation.id),supabase.from('evaluation_review_items').select('*').eq('evaluation_id',evaluation.id).order('created_at',{ascending:false})]);
+ const qids=(responses??[]).map(r=>r.question_id).filter(Boolean);const {data:questions}=qids.length?await supabase.from('evaluation_questions').select('id,title').in('id',qids):{data:[] as any[]};const qm=new Map<string, string>((questions??[]).map((q:any)=>[q.id,q.title]));
+ return <PageShell title={`2차 Review · ${employee?.name??''}`} description="근거 충분성, 점수-사례 일치, 관대/엄격, 감정 가능성, 회사기준 부합 여부를 검토합니다."><Notice success={stringParam(sp.success)} error={stringParam(sp.error)}/>
+ <div className="space-y-3">{(responses??[]).map(r=><Card key={r.id}><div className="flex justify-between gap-3"><div><b>{qm.get(r.question_id)??'문항'}</b><p className="mt-1 text-sm">{r.comment??'-'}</p><p className="mt-2 text-xs text-slate-500">Evidence: {r.evidence_note??'-'}</p></div><div className="text-2xl font-black">{r.score}</div></div>
+ <form action={reviewFirstEvaluation.bind(null,evaluation.id,assignmentId)} className="mt-4 grid gap-2 md:grid-cols-[180px_120px_1fr_auto]"><input type="hidden" name="response_id" value={r.id}/><select name="decision" className="rounded-lg border px-2 py-2"><option value="approved">승인</option><option value="commented">의견 추가</option><option value="revision_requested">재검토 요청</option><option value="calibration_required">Calibration 필요</option></select><input name="requested_score" type="number" min="1" max="5" step="0.5" placeholder="요청점수" className="rounded-lg border px-2 py-2"/><input name="review_comment" placeholder="검토 의견" className="rounded-lg border px-3 py-2"/><button className="rounded-lg border px-3 py-2 font-semibold">저장</button></form></Card>)}</div>
+ {(reviews??[]).length>0&&<Card><h2 className="font-bold">검토 이력</h2><div className="mt-3 space-y-2 text-sm">{(reviews??[]).map(x=><div key={x.id} className="rounded-lg bg-slate-50 p-3">{x.decision} · {x.review_comment??'-'}</div>)}</div></Card>}
+ </PageShell>
+}

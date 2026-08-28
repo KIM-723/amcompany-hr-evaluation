@@ -1,0 +1,25 @@
+# STEP 20 배포 체크리스트
+
+- [ ] npm run lint
+- [ ] npm run typecheck
+- [ ] npm run build
+- [ ] GitHub .env / Secret Key 없음
+- [ ] Vercel Production 환경변수 설정
+- [ ] FORCE_DEMO_LOGIN=false
+- [ ] DEMO_SETUP_ENABLED=false
+- [ ] NEXT_PUBLIC_DEMO_MODE=false
+- [ ] 정상 직원 로그인
+- [ ] 직원관리
+- [ ] 관찰일지
+- [ ] 자기평가
+- [ ] 1차 평가
+- [ ] 2차 Review
+- [ ] 결과조회
+- [ ] Calibration
+- [ ] 9-Block
+- [ ] 성장계획
+- [ ] Dashboard
+- [ ] Excel
+- [ ] Role별 직접 URL 접근 테스트
+- [ ] `/settings/security` PASS 확인
+- [ ] GitHub push 후 Vercel 자동배포 확인
