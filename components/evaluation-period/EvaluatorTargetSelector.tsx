@@ -23,6 +23,16 @@ type Department = {
 
 type Mode = 'member' | 'leader';
 
+function isDepartmentHeadTarget(person: Person) {
+  const positionName = person.position_name.trim().toLowerCase();
+
+  return (
+    person.evaluator_role === 'leader' ||
+    positionName.includes('부서장') ||
+    positionName.includes('리더')
+  );
+}
+
 export function EvaluatorTargetSelector({
   action,
   templates,
@@ -38,7 +48,7 @@ export function EvaluatorTargetSelector({
   leaders: Person[];
   /** Internal role code division_head = 본부장 */
   divisionHeads: Person[];
-  /** Legacy prop. New UI uses divisionHeads for all 본부장 selections. */
+  /** Legacy prop. New UI uses divisionHeads for 본부장 selections. */
   executives: Person[];
   employees: Person[];
   departments: Department[];
@@ -63,6 +73,7 @@ export function EvaluatorTargetSelector({
     const result = new Set<string>();
     let frontier = [selectedEvaluator.department_id];
 
+    // 본부장 소속 조직 아래의 모든 하위 조직을 단계 수와 관계없이 재귀 조회.
     while (frontier.length > 0) {
       const next: string[] = [];
 
@@ -87,27 +98,33 @@ export function EvaluatorTargetSelector({
     if (!selectedEvaluator?.department_id) return [];
 
     if (mode === 'member') {
-      // 일반 구성원: 같은 부서의 일반 직책만. 부서장 본인은 제외.
+      // 일반 구성원:
+      // 같은 부서 + 평가대상 부서장/리더 직책은 제외 + 부서장 본인 제외.
       return employees.filter(
         (employee) =>
           employee.department_id === selectedEvaluator.department_id &&
           employee.id !== selectedEvaluator.id &&
-          employee.evaluator_role === 'none',
+          !isDepartmentHeadTarget(employee) &&
+          !['division_head', 'executive'].includes(employee.evaluator_role),
       );
     }
 
-    // 부서장 평가: 선택한 본부장의 산하 부서 중 부서장만 조회.
+    // 부서장 평가:
+    // 선택한 본부장의 모든 산하 조직에서
+    // 1) 평가역할이 부서장(leader)이거나
+    // 2) 실제 직책명이 "부서장" 또는 기존 "리더"
+    // 인 사람을 모두 표시한다.
     return employees.filter(
       (employee) =>
         employee.department_id !== null &&
         descendantDepartmentIds.has(employee.department_id) &&
-        employee.evaluator_role === 'leader',
+        employee.id !== selectedEvaluator.id &&
+        isDepartmentHeadTarget(employee),
     );
   }, [employees, mode, selectedEvaluator, descendantDepartmentIds]);
 
-  // 직원목록이 갱신되면 삭제된 직원은 선택에서 제거하고,
-  // 새로 들어온 직원만 자동 체크한다. 사용자가 기존 직원의 체크를
-  // 직접 해제한 상태는 유지한다.
+  // 직원목록이 바뀌면 새 대상은 자동체크하고 삭제된 대상은 제거.
+  // 사용자가 기존 대상의 체크를 해제한 상태는 유지한다.
   useEffect(() => {
     const currentIds = new Set(targets.map((employee) => employee.id));
     const newlyAddedIds = [...currentIds].filter((id) => !knownTargetIds.current.has(id));
@@ -143,7 +160,8 @@ export function EvaluatorTargetSelector({
           (employee) =>
             employee.department_id === evaluator.department_id &&
             employee.id !== evaluator.id &&
-            employee.evaluator_role === 'none',
+            !isDepartmentHeadTarget(employee) &&
+            !['division_head', 'executive'].includes(employee.evaluator_role),
         )
         .map((employee) => employee.id);
 
@@ -177,7 +195,8 @@ export function EvaluatorTargetSelector({
         (employee) =>
           employee.department_id !== null &&
           descendantIds.has(employee.department_id) &&
-          employee.evaluator_role === 'leader',
+          employee.id !== evaluator.id &&
+          isDepartmentHeadTarget(employee),
       )
       .map((employee) => employee.id);
 
@@ -217,7 +236,13 @@ export function EvaluatorTargetSelector({
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="text-sm font-bold">평가대상 구분</div>
         <div className="mt-3 flex flex-wrap gap-3">
-          <label className={`cursor-pointer rounded-xl border px-4 py-3 text-sm ${mode === 'member' ? 'border-blue-400 bg-blue-50 font-bold text-blue-800' : 'bg-white'}`}>
+          <label
+            className={`cursor-pointer rounded-xl border px-4 py-3 text-sm ${
+              mode === 'member'
+                ? 'border-blue-400 bg-blue-50 font-bold text-blue-800'
+                : 'bg-white'
+            }`}
+          >
             <input
               type="radio"
               name="mode_radio"
@@ -226,10 +251,18 @@ export function EvaluatorTargetSelector({
               className="mr-2"
             />
             일반 구성원 평가
-            <span className="ml-2 text-xs font-normal text-slate-500">같은 부서 부서장 → 구성원</span>
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              같은 부서 부서장 → 구성원
+            </span>
           </label>
 
-          <label className={`cursor-pointer rounded-xl border px-4 py-3 text-sm ${mode === 'leader' ? 'border-violet-400 bg-violet-50 font-bold text-violet-800' : 'bg-white'}`}>
+          <label
+            className={`cursor-pointer rounded-xl border px-4 py-3 text-sm ${
+              mode === 'leader'
+                ? 'border-violet-400 bg-violet-50 font-bold text-violet-800'
+                : 'bg-white'
+            }`}
+          >
             <input
               type="radio"
               name="mode_radio"
@@ -238,7 +271,9 @@ export function EvaluatorTargetSelector({
               className="mr-2"
             />
             부서장 평가
-            <span className="ml-2 text-xs font-normal text-slate-500">본부장 → 산하부서 부서장</span>
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              본부장 → 산하조직 부서장·리더
+            </span>
           </label>
         </div>
       </div>
@@ -269,39 +304,46 @@ export function EvaluatorTargetSelector({
             required
             className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5"
           >
-            <option value="">{mode === 'member' ? '부서장 선택' : '본부장 선택'}</option>
+            <option value="">
+              {mode === 'member' ? '부서장 선택' : '본부장 선택'}
+            </option>
             {firstEvaluators.map((person) => (
               <option key={person.id} value={person.id}>
-                {person.employee_no} · {person.name} · {person.department_name || '부서 미지정'}
+                {person.employee_no} · {person.name} ·{' '}
+                {person.department_name || '부서 미지정'}
               </option>
             ))}
           </select>
           <span className="mt-1 block text-xs font-normal text-slate-400">
             {mode === 'member'
               ? '부서장 선택 → 같은 부서 일반 구성원 자동조회'
-              : '본부장 선택 → 본부 산하 부서의 부서장 자동조회'}
+              : '본부장 선택 → 본부 산하 전체 조직의 부서장·리더 자동조회'}
           </span>
         </label>
 
         <label className="text-sm font-medium">
-          2차 평가자 · 본부장 *
+          {mode === 'member'
+            ? '2차 평가자 · 본부장 *'
+            : '2차 평가자 · 본부장 (선택)'}
           <select
             name="second_evaluator_id"
-            required
+            required={mode === 'member'}
             className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5"
           >
-            <option value="">본부장 선택</option>
+            <option value="">
+              {mode === 'member' ? '본부장 선택' : '선택 안 함'}
+            </option>
             {headquartersHeads.map((head) => (
               <option key={head.id} value={head.id}>
                 {head.employee_no} · {head.name} · {head.position_name}
               </option>
             ))}
           </select>
-          {headquartersHeads.length === 0 && (
-            <span className="mt-1 block text-xs font-normal text-red-500">
-              직책관리에서 본부장 직책을 먼저 지정해주세요.
-            </span>
-          )}
+          <span className="mt-1 block text-xs font-normal text-slate-400">
+            {mode === 'member'
+              ? '일반 구성원 평가는 2차 본부장 지정이 필수입니다.'
+              : '부서장 평가는 2차 평가자를 지정하지 않아도 등록할 수 있습니다.'}
+          </span>
         </label>
       </div>
 
@@ -317,7 +359,7 @@ export function EvaluatorTargetSelector({
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
           {mode === 'member'
             ? `${selectedEvaluator.department_name}에 추가 가능한 일반 구성원이 없습니다.`
-            : `${selectedEvaluator.department_name} 산하 조직에서 추가 가능한 부서장이 없습니다.`}
+            : `${selectedEvaluator.department_name} 산하 조직에서 추가 가능한 부서장·리더가 없습니다. 조직관리의 상위조직 연결과 직원 직책을 확인해주세요.`}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -326,10 +368,10 @@ export function EvaluatorTargetSelector({
               <div className="font-bold">
                 {mode === 'member'
                   ? `${selectedEvaluator.department_name} · 일반 구성원 ${targets.length}명`
-                  : `${selectedEvaluator.department_name} 산하 · 부서장 ${targets.length}명`}
+                  : `${selectedEvaluator.department_name} 산하 전체 조직 · 부서장/리더 ${targets.length}명`}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                현재 직원목록을 기준으로 조회합니다. 전원 자동체크되며 일부 해제할 수 있습니다.
+                현재 직원목록을 기준으로 하위조직 전체를 조회합니다. 전원 자동체크되며 일부 해제할 수 있습니다.
               </div>
             </div>
 
@@ -380,7 +422,7 @@ export function EvaluatorTargetSelector({
             !firstEvaluatorId ||
             !selectedEvaluator?.department_id ||
             selectedIds.length === 0 ||
-            headquartersHeads.length === 0
+            (mode === 'member' && headquartersHeads.length === 0)
           }
           className="rounded-xl bg-navy-900 px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
         >

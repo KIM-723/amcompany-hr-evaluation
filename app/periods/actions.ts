@@ -349,7 +349,7 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
   const secondEvaluatorId = requiredText(formData.get('second_evaluator_id'));
   const assignmentMode = requiredText(formData.get('assignment_mode')) || 'member';
 
-  if (!['member','leader'].includes(assignmentMode)) {
+  if (!['member', 'leader'].includes(assignmentMode)) {
     redirect(messageUrl(`/periods/${periodId}`, 'error', '평가대상 구분값이 올바르지 않습니다.'));
   }
 
@@ -365,8 +365,20 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
     redirect(messageUrl(`/periods/${periodId}`, 'error', '1차 평가자를 선택해주세요.'));
   }
 
-  if (!z.string().uuid().safeParse(secondEvaluatorId).success) {
+  // 일반 구성원 평가만 2차 본부장 필수.
+  if (
+    assignmentMode === 'member' &&
+    !z.string().uuid().safeParse(secondEvaluatorId).success
+  ) {
     redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자인 본부장을 선택해주세요.'));
+  }
+
+  if (
+    assignmentMode === 'leader' &&
+    secondEvaluatorId &&
+    !z.string().uuid().safeParse(secondEvaluatorId).success
+  ) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자 정보가 올바르지 않습니다.'));
   }
 
   const status = await getPeriodStatus(periodId);
@@ -382,27 +394,33 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
 
   const { supabase } = await requireHrAdmin();
 
+  const firstEvaluatorQuery = supabase
+    .from('employees')
+    .select('id,is_leader,position_id,department_id,positions(name,evaluation_role)')
+    .eq('id', firstEvaluatorId)
+    .neq('employment_status', 'resigned')
+    .single();
+
+  const secondEvaluatorQuery = secondEvaluatorId
+    ? supabase
+        .from('employees')
+        .select('id,position_id,department_id,positions(name,evaluation_role)')
+        .eq('id', secondEvaluatorId)
+        .neq('employment_status', 'resigned')
+        .single()
+    : Promise.resolve({ data: null, error: null });
+
   const [
     { data: firstEvaluator, error: firstError },
     { data: secondEvaluator, error: secondError },
     { data: targets, error: targetError },
     { data: departments, error: departmentError },
   ] = await Promise.all([
+    firstEvaluatorQuery,
+    secondEvaluatorQuery,
     supabase
       .from('employees')
-      .select('id,is_leader,position_id,department_id,positions(evaluation_role)')
-      .eq('id', firstEvaluatorId)
-      .neq('employment_status', 'resigned')
-      .single(),
-    supabase
-      .from('employees')
-      .select('id,position_id,department_id,positions(evaluation_role)')
-      .eq('id', secondEvaluatorId)
-      .neq('employment_status', 'resigned')
-      .single(),
-    supabase
-      .from('employees')
-      .select('id,is_leader,position_id,department_id,positions(evaluation_role)')
+      .select('id,is_leader,position_id,department_id,positions(name,evaluation_role)')
       .in('id', employeeIds)
       .neq('employment_status', 'resigned'),
     supabase
@@ -424,7 +442,13 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
     ? secondEvaluator?.positions[0]
     : secondEvaluator?.positions;
 
-  if (!secondEvaluator || !['division_head', 'executive'].includes(secondPosition?.evaluation_role ?? 'none')) {
+  if (
+    secondEvaluatorId &&
+    (!secondEvaluator ||
+      !['division_head', 'executive'].includes(
+        secondPosition?.evaluation_role ?? 'none',
+      ))
+  ) {
     redirect(
       messageUrl(
         `/periods/${periodId}`,
@@ -445,10 +469,14 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
   }
 
   if (assignmentMode === 'member') {
-    const firstIsLeader =
-      !!firstEvaluator && firstPosition?.evaluation_role === 'leader';
+    const firstIsDepartmentHead =
+      !!firstEvaluator &&
+      (
+        firstPosition?.evaluation_role === 'leader' ||
+        (firstPosition?.name ?? '').includes('부서장')
+      );
 
-    if (!firstIsLeader) {
+    if (!firstIsDepartmentHead) {
       redirect(
         messageUrl(
           `/periods/${periodId}`,
@@ -463,10 +491,17 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
         ? employee.positions[0]
         : employee.positions;
 
+      const positionName = position?.name ?? '';
+      const isDepartmentHeadTarget =
+        position?.evaluation_role === 'leader' ||
+        positionName.includes('부서장') ||
+        positionName.includes('리더');
+
       return (
         employee.id === firstEvaluatorId ||
         employee.department_id !== firstEvaluator.department_id ||
-        ['leader','division_head','executive'].includes(position?.evaluation_role ?? 'none')
+        isDepartmentHeadTarget ||
+        ['division_head', 'executive'].includes(position?.evaluation_role ?? 'none')
       );
     });
 
@@ -480,7 +515,11 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       );
     }
   } else {
-    if (!['division_head', 'executive'].includes(firstPosition?.evaluation_role ?? 'none')) {
+    if (
+      !['division_head', 'executive'].includes(
+        firstPosition?.evaluation_role ?? 'none',
+      )
+    ) {
       redirect(
         messageUrl(
           `/periods/${periodId}`,
@@ -515,10 +554,17 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
         ? employee.positions[0]
         : employee.positions;
 
+      const positionName = position?.name ?? '';
+      const isDepartmentHeadOrLegacyLeader =
+        position?.evaluation_role === 'leader' ||
+        positionName.includes('부서장') ||
+        positionName.includes('리더');
+
       return (
+        employee.id === firstEvaluatorId ||
         !employee.department_id ||
         !descendantIds.has(employee.department_id) ||
-        position?.evaluation_role !== 'leader'
+        !isDepartmentHeadOrLegacyLeader
       );
     });
 
@@ -527,7 +573,7 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '부서장 평가는 선택한 본부장 산하 부서의 부서장만 등록할 수 있습니다.',
+          '부서장 평가는 선택한 본부장 산하 전체 조직의 부서장·리더만 등록할 수 있습니다.',
         ),
       );
     }
@@ -537,7 +583,7 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
     period_id: periodId,
     employee_id: employeeId,
     first_evaluator_id: firstEvaluatorId,
-    second_evaluator_id: secondEvaluatorId,
+    second_evaluator_id: secondEvaluatorId || null,
     template_id: templateId,
     status: 'not_started',
     current_stage: 'not_started',
@@ -586,7 +632,9 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       'success',
       assignmentMode === 'member'
         ? `${inserted?.length ?? 0}명 등록 · 1차 부서장 / 2차 본부장으로 지정했습니다.`
-        : `${inserted?.length ?? 0}명의 부서장 등록 · 1차 본부장 / 2차 본부장으로 지정했습니다.`,
+        : `${inserted?.length ?? 0}명의 부서장·리더 등록 · 1차 본부장${
+            secondEvaluatorId ? ' / 2차 본부장' : ' / 2차평가 없음'
+          }으로 지정했습니다.`,
     ),
   );
 }
@@ -616,6 +664,17 @@ export async function updateAssignment(
     redirect(messageUrl(`/periods/${periodId}`, 'error', '평가 Template을 선택해주세요.'));
   }
 
+  if (!z.string().uuid().safeParse(firstEvaluatorId).success) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '1차 평가자를 선택해주세요.'));
+  }
+
+  if (
+    secondEvaluatorId &&
+    !z.string().uuid().safeParse(secondEvaluatorId).success
+  ) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자 정보가 올바르지 않습니다.'));
+  }
+
   const { supabase } = await requireHrAdmin();
 
   const { data: assignment, error: assignmentError } = await supabase
@@ -635,31 +694,46 @@ export async function updateAssignment(
     );
   }
 
+  const targetQuery = supabase
+    .from('employees')
+    .select('id,is_leader,department_id,position_id,positions(name,evaluation_role)')
+    .eq('id', assignment.employee_id)
+    .single();
+
+  const firstQuery = supabase
+    .from('employees')
+    .select('id,is_leader,department_id,position_id,positions(name,evaluation_role)')
+    .eq('id', firstEvaluatorId)
+    .single();
+
+  const secondQuery = secondEvaluatorId
+    ? supabase
+        .from('employees')
+        .select('id,positions(name,evaluation_role)')
+        .eq('id', secondEvaluatorId)
+        .single()
+    : Promise.resolve({ data: null, error: null });
+
   const [
-    { data: target },
-    { data: firstEvaluator },
-    { data: secondEvaluator },
-    { data: departments },
+    { data: target, error: targetError },
+    { data: firstEvaluator, error: firstError },
+    { data: secondEvaluator, error: secondError },
+    { data: departments, error: departmentError },
   ] = await Promise.all([
-    supabase
-      .from('employees')
-      .select('id,is_leader,department_id,position_id,positions(evaluation_role)')
-      .eq('id', assignment.employee_id)
-      .single(),
-    supabase
-      .from('employees')
-      .select('id,is_leader,department_id,position_id,positions(evaluation_role)')
-      .eq('id', firstEvaluatorId)
-      .single(),
-    supabase
-      .from('employees')
-      .select('id,positions(evaluation_role)')
-      .eq('id', secondEvaluatorId)
-      .single(),
-    supabase.from('departments').select('id,parent_id').eq('is_active',true),
+    targetQuery,
+    firstQuery,
+    secondQuery,
+    supabase.from('departments').select('id,parent_id').eq('is_active', true),
   ]);
 
-  const targetPosition = Array.isArray(target?.positions) ? target?.positions[0] : target?.positions;
+  const validationError = targetError || firstError || secondError || departmentError;
+  if (validationError) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', validationError.message));
+  }
+
+  const targetPosition = Array.isArray(target?.positions)
+    ? target?.positions[0]
+    : target?.positions;
   const firstPosition = Array.isArray(firstEvaluator?.positions)
     ? firstEvaluator?.positions[0]
     : firstEvaluator?.positions;
@@ -667,21 +741,40 @@ export async function updateAssignment(
     ? secondEvaluator?.positions[0]
     : secondEvaluator?.positions;
 
-  if (!secondEvaluator || !['division_head', 'executive'].includes(secondPosition?.evaluation_role ?? 'none')) {
-    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자는 본부장만 지정할 수 있습니다.'));
-  }
-
   if (!target?.department_id || !firstEvaluator?.department_id) {
-    redirect(messageUrl(`/periods/${periodId}`, 'error', '대상자 또는 1차 평가자의 부서가 없습니다.'));
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        '대상자 또는 1차 평가자의 부서가 없습니다.',
+      ),
+    );
   }
 
-  const targetIsLeader = targetPosition?.evaluation_role === 'leader';
+  const targetPositionName = targetPosition?.name ?? '';
+  const targetIsDepartmentHeadOrLeader =
+    targetPosition?.evaluation_role === 'leader' ||
+    targetPositionName.includes('부서장') ||
+    targetPositionName.includes('리더');
 
-  if (!targetIsLeader) {
-    const firstIsLeader = firstPosition?.evaluation_role === 'leader';
+  if (!targetIsDepartmentHeadOrLeader) {
+    // 일반 구성원은 2차 본부장 필수.
+    if (!secondEvaluatorId) {
+      redirect(
+        messageUrl(
+          `/periods/${periodId}`,
+          'error',
+          '일반 구성원 평가는 2차 평가자인 본부장이 필수입니다.',
+        ),
+      );
+    }
+
+    const firstIsDepartmentHead =
+      firstPosition?.evaluation_role === 'leader' ||
+      (firstPosition?.name ?? '').includes('부서장');
 
     if (
-      !firstIsLeader ||
+      !firstIsDepartmentHead ||
       target.department_id !== firstEvaluator.department_id ||
       assignment.employee_id === firstEvaluatorId
     ) {
@@ -694,12 +787,17 @@ export async function updateAssignment(
       );
     }
   } else {
-    if (!['division_head', 'executive'].includes(firstPosition?.evaluation_role ?? 'none')) {
+    // 부서장/기존 리더는 1차 본부장 필수, 2차는 선택.
+    if (
+      !['division_head', 'executive'].includes(
+        firstPosition?.evaluation_role ?? 'none',
+      )
+    ) {
       redirect(
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '부서장의 1차 평가자는 본부장이어야 합니다.',
+          '부서장·리더의 1차 평가자는 본부장이어야 합니다.',
         ),
       );
     }
@@ -729,17 +827,33 @@ export async function updateAssignment(
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '선택한 본부장의 산하 조직에 속한 부서장이 아닙니다.',
+          '선택한 본부장의 산하 조직에 속한 부서장·리더가 아닙니다.',
         ),
       );
     }
+  }
+
+  if (
+    secondEvaluatorId &&
+    (!secondEvaluator ||
+      !['division_head', 'executive'].includes(
+        secondPosition?.evaluation_role ?? 'none',
+      ))
+  ) {
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        '2차 평가자는 본부장만 지정할 수 있습니다.',
+      ),
+    );
   }
 
   const { error } = await supabase
     .from('evaluation_assignments')
     .update({
       first_evaluator_id: firstEvaluatorId,
-      second_evaluator_id: secondEvaluatorId,
+      second_evaluator_id: secondEvaluatorId || null,
       template_id: templateId,
       updated_at: new Date().toISOString(),
     })

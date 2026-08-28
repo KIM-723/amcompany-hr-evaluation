@@ -1,66 +1,60 @@
-직원목록 실시간 반영 + 부서장/본부장 평가자 명칭 패치
+산하조직 부서장·리더 전체조회 + 부서장평가 2차 선택사항 패치
 
-변경사항
-1. 직원 신규등록/삭제/Excel 등록 내용을 기존 평가기간에 최신 반영
-2. 평가기간 상세는 DB 직원목록을 매번 새로 조회 (force-dynamic)
-3. 탭 복귀/창 포커스/10초 주기/수동 버튼으로 자동 갱신
-4. 새로 추가된 직원은 현재 선택한 부서장의 평가대상에 자동 추가·체크
-5. 삭제된 직원은 평가대상 후보/선택에서 자동 제거
-6. 기존 '리더' 평가자 구분 -> '부서장'
-7. 기존 '임원' 평가자 구분 -> '본부장'
-8. 평가자 선정은 직원의 리더 여부 boolean이 아니라 직책관리의 평가자 구분을 기준으로 함
+변경내용
 
-평가 규칙
-- 일반 구성원: 같은 부서 부서장 1차 -> 본부장 2차
-- 부서장: 상위 본부 본부장 1차 -> 본부장 2차
+1. 부서장 평가에서 본부장을 선택하면:
+   - 본부장 소속 조직의 직접 하위부서만 보는 것이 아니라
+   - 모든 하위단계 조직을 재귀적으로 조회
+   - 그 조직에 속한 사람 중
+     * 직책관리 evaluation_role = 부서장
+     * 실제 직책명에 '부서장' 포함
+     * 실제 직책명에 '리더' 포함
+     인 사람을 모두 평가대상에 표시
+
+2. 부서장 평가의 2차 평가자:
+   - 필수 아님
+   - '선택 안 함' 가능
+   - DB에는 second_evaluator_id = NULL 저장
+
+3. 일반 구성원 평가:
+   - 기존 유지
+   - 1차 = 같은 부서 부서장
+   - 2차 = 본부장 필수
+
+4. 기존 직원 신규/삭제 실시간 갱신 기능 유지
+
+적용 순서
 
 [1] GitHub 먼저
 ZIP 압축 해제
 GitHub -> Add file -> Upload files
-아래 폴더 전체 업로드:
+
+업로드:
 - app
 - components
-- docs
 - supabase
 
 Commit:
-feat: live evaluation roster and department head roles
+fix: show all suborg heads and make second review optional
 
-[2] Supabase SQL
-GitHub Commit 직후 SQL Editor에서 순서대로 실행:
-1. 026_live_roster_department_head_division_head.sql
-2. 성공 후 027_live_roster_department_head_validation.sql
+[2] Supabase SQL Editor
+028_suborg_department_heads_optional_second.sql
+성공 후
+029_suborg_department_heads_validation.sql
 
-027 확인:
+029에서:
 - evaluator_validation_function = true
 - descendant_department_function = true
-- department_head_candidates 숫자 확인
-- division_head_candidates 숫자 확인
 
-[3] Vercel
-자동배포 -> Ready 확인
-GitHub 먼저 올렸기 때문에 SQL 실행 전 잠깐은 새 평가기간 화면에서 DB 역할 오류가 날 수 있음.
-026 SQL 실행 후 새로고침하면 정상화됨.
+[3] Vercel Ready 확인
 
-[4] 직책관리 확인
-/organization/positions
-평가자 구분은 이제:
-- 일반
-- 부서장
-- 본부장
+[4] 테스트
+평가기간 -> 부서장 평가
+-> 본부장 선택
+-> 산하 전체 조직의 부서장/리더 출력 확인
+-> 2차 평가자 '선택 안 함'
+-> 평가대상 등록
 
-기존 executive(임원) 역할값은 026에서 본부장으로 자동 전환됨.
-직책명이 '부서장', '본부장'을 포함하면 026에서 해당 평가자 역할로 자동 보정함.
-
-[5] 실시간 반영 테스트
-A. 평가기간 상세 화면을 열어둠
-B. 다른 탭에서 직원 한 명 신규등록
-C. 평가기간 탭으로 돌아오면 즉시 갱신됨
-   또는 최대 10초 안에 자동 갱신
-D. 해당 부서장을 이미 선택한 상태라면 신규 직원이 목록에 추가되고 자동 체크됨
-E. 직원 영구삭제 시 해당 직원의 평가데이터/assignment 삭제 후 평가기간 화면에서도 자동 제거됨
-
-중요
-- 새 직원이 평가대상으로 조회되려면 부서가 지정되어 있어야 함.
-- 일반 구성원의 1차 평가자는 동일 부서의 '부서장' 직책이어야 함.
-- 본부장은 직책관리 평가자 구분을 '본부장'으로 지정해야 함.
+중요:
+조직관리에서 하위부서의 parent_id가 본부/상위조직에 연결되어 있어야
+'산하조직'으로 조회됩니다.

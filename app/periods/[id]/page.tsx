@@ -195,7 +195,19 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
   const editableAssignments = ['draft', 'scheduled'].includes(period.status);
   const canAddTargets = !['calibration', 'closed'].includes(period.status);
   const firstMissing = assignments.filter((x) => !x.first_evaluator_id).length;
-  const secondMissing = assignments.filter((x) => !x.second_evaluator_id).length;
+  const secondMissing = assignments.filter((assignment) => {
+    if (assignment.second_evaluator_id) return false;
+
+    const target = employeeMap.get(assignment.employee_id);
+    const targetPosition = target?.position_id ? positionMap.get(target.position_id) : null;
+    const positionName = targetPosition?.name ?? '';
+    const isDepartmentHeadOrLeader =
+      targetPosition?.evaluation_role === 'leader' ||
+      positionName.includes('부서장') ||
+      positionName.includes('리더');
+
+    return !isDepartmentHeadOrLeader;
+  }).length;
   const calibrationRound = Number(period.calibration_round ?? 0);
 
   return (
@@ -277,7 +289,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
         <Card><div className="text-xs text-slate-500">평가대상</div><div className="mt-1 text-2xl font-bold">{assignments.length}명</div></Card>
         <Card><div className="text-xs text-slate-500">Snapshot</div><div className="mt-1 text-2xl font-bold">{snapshotIds.size}건</div></Card>
         <Card><div className="text-xs text-slate-500">1차 평가자 미지정</div><div className="mt-1 text-2xl font-bold">{firstMissing}명</div></Card>
-        <Card><div className="text-xs text-slate-500">2차 평가자 미지정</div><div className="mt-1 text-2xl font-bold">{secondMissing}명</div></Card>
+        <Card><div className="text-xs text-slate-500">필수 2차 평가자 미지정</div><div className="mt-1 text-2xl font-bold">{secondMissing}명</div></Card>
       </div>
 
       <Card>
@@ -296,8 +308,8 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
             <h2 className="font-bold">평가대상 자동배정</h2>
             <p className="mt-1 text-sm text-slate-500">
               <b>일반 구성원 평가</b>는 부서장 선택 → 같은 부서 일반 구성원 자동조회,
-              <b>부서장 평가</b>는 본부장 선택 → 해당 본부 산하 부서장 자동조회 방식입니다.
-              2차 평가자는 <b>본부장</b>으로 지정합니다.
+              <b>부서장 평가</b>는 본부장 선택 → 해당 본부 산하 전체 조직의 <b>부서장·리더</b> 자동조회 방식입니다.
+              일반 구성원은 2차 본부장이 필수이고, 부서장·리더 평가는 2차 평가자를 생략할 수 있습니다.
             </p>
           </div>
           <EvaluationRosterLiveRefresh
@@ -335,7 +347,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
         <div className="mb-3">
           <h2 className="text-lg font-bold">평가대상 / 평가자 지정</h2>
           <p className="mt-1 text-xs text-slate-500">
-            평가 시작 전에는 개별 수정할 수 있습니다. 일반 구성원의 1차 평가자는 같은 부서 부서장, 2차 평가자는 본부장입니다.
+            평가 시작 전에는 개별 수정할 수 있습니다. 일반 구성원은 2차 본부장이 필수이며, 부서장·리더는 2차 평가자를 생략할 수 있습니다.
           </p>
         </div>
 
@@ -344,6 +356,14 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
             const employee = employeeMap.get(assignment.employee_id);
             const updateAction = updateAssignment.bind(null, id, assignment.id);
             const removeAction = removeEvaluationTarget.bind(null, id, assignment.id);
+            const targetPosition = employee?.position_id
+              ? positionMap.get(employee.position_id)
+              : null;
+            const targetPositionName = targetPosition?.name ?? '';
+            const isDepartmentHeadOrLeader =
+              targetPosition?.evaluation_role === 'leader' ||
+              targetPositionName.includes('부서장') ||
+              targetPositionName.includes('리더');
 
             return (
               <Card key={assignment.id}>
@@ -396,15 +416,19 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
                     </label>
 
                     <label className="text-xs font-semibold text-slate-600">
-                      2차 평가자 · 본부장
+                      {isDepartmentHeadOrLeader
+                        ? '2차 평가자 · 본부장 (선택)'
+                        : '2차 평가자 · 본부장 *'}
                       <select
                         name="second_evaluator_id"
-                        required
+                        required={!isDepartmentHeadOrLeader}
                         defaultValue={assignment.second_evaluator_id ?? ''}
                         disabled={!editableAssignments}
                         className="mt-1 w-full rounded-lg border px-2 py-2 text-sm disabled:bg-slate-50"
                       >
-                        <option value="">선택</option>
+                        <option value="">
+                          {isDepartmentHeadOrLeader ? '선택 안 함' : '선택'}
+                        </option>
                         {divisionHeads.map((head) => (
                           <option key={head.id} value={head.id}>
                             {head.name}
