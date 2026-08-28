@@ -13,7 +13,7 @@ export default async function CalibrationPage({ searchParams }: { searchParams: 
 
   const periodId = stringParam(sp.period);
   const [{ data: periods }, { data: anomalies }, { data: evaluatorStats }, { data: logs }] = await Promise.all([
-    supabase.from('evaluation_periods').select('id,name,status').order('start_date', { ascending: false }),
+    supabase.from('evaluation_periods').select('id,name,status,calibration_round').order('start_date', { ascending: false }),
     supabase.from('calibration_anomalies_v').select('*').limit(200),
     supabase.from('evaluator_score_stats_v').select('*').limit(100),
     supabase.from('calibration_logs').select('*').order('created_at', { ascending: false }).limit(50),
@@ -31,7 +31,7 @@ export default async function CalibrationPage({ searchParams }: { searchParams: 
             평가기간
             <select name="period" defaultValue={periodId} className="ml-3 rounded-lg border px-3 py-2">
               <option value="">전체</option>
-              {(periods ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {(periods ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}{p.calibration_round ? ` · ${p.calibration_round}차` : ''}</option>)}
             </select>
           </label>
           <button className="rounded-lg border px-4 py-2 font-semibold">조회</button>

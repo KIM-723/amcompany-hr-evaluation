@@ -279,21 +279,47 @@ export async function activatePeriod(periodId: string) {
 export async function moveToCalibration(periodId: string) {
   const { supabase, user } = await requireHrAdmin();
 
-  const { error } = await supabase
-    .from('evaluation_periods')
-    .update({
-      status: 'calibration',
-      updated_by: user.employeeId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', periodId)
-    .in('status', ['active', 'calibration']);
+  const { data, error } = await supabase.rpc('start_or_restart_calibration', {
+    p_period_id: periodId,
+    p_actor_id: user.employeeId,
+  });
 
   if (error) redirect(messageUrl(`/periods/${periodId}`, 'error', error.message));
 
   revalidatePath('/periods');
   revalidatePath(`/periods/${periodId}`);
-  redirect(messageUrl(`/periods/${periodId}`, 'success', 'Calibration 단계로 변경했습니다.'));
+  revalidatePath('/calibration');
+
+  redirect(
+    messageUrl(
+      `/periods/${periodId}`,
+      'success',
+      `Calibration ${data?.calibration_round ?? ''}차를 시작했습니다.`,
+    ),
+  );
+}
+
+export async function releaseCalibration(periodId: string) {
+  const { supabase, user } = await requireHrAdmin();
+
+  const { data, error } = await supabase.rpc('release_calibration', {
+    p_period_id: periodId,
+    p_actor_id: user.employeeId,
+  });
+
+  if (error) redirect(messageUrl(`/periods/${periodId}`, 'error', error.message));
+
+  revalidatePath('/periods');
+  revalidatePath(`/periods/${periodId}`);
+  revalidatePath('/calibration');
+
+  redirect(
+    messageUrl(
+      `/periods/${periodId}`,
+      'success',
+      `Calibration ${data?.calibration_round ?? ''}차를 해제했습니다. 기존 점수 변경이력은 유지됩니다.`,
+    ),
+  );
 }
 
 export async function closePeriod(periodId: string) {
@@ -319,8 +345,8 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
     .filter((value): value is string => typeof value === 'string' && value.length > 0);
 
   const templateId = requiredText(formData.get('template_id'));
-  const firstEvaluatorId = optionalText(formData.get('first_evaluator_id'));
-  const secondEvaluatorId = optionalText(formData.get('second_evaluator_id'));
+  const firstEvaluatorId = requiredText(formData.get('first_evaluator_id'));
+  const secondEvaluatorId = requiredText(formData.get('second_evaluator_id'));
 
   if (employeeIds.length === 0) {
     redirect(messageUrl(`/periods/${periodId}`, 'error', '평가대상자를 1명 이상 선택해주세요.'));
@@ -330,12 +356,100 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
     redirect(messageUrl(`/periods/${periodId}`, 'error', '평가 Template을 선택해주세요.'));
   }
 
+  if (!z.string().uuid().safeParse(firstEvaluatorId).success) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '1차 평가자인 리더를 선택해주세요.'));
+  }
+
+  if (!z.string().uuid().safeParse(secondEvaluatorId).success) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자인 임원을 선택해주세요.'));
+  }
+
   const status = await getPeriodStatus(periodId);
   if (status === 'closed' || status === 'calibration') {
-    redirect(messageUrl(`/periods/${periodId}`, 'error', 'Calibration 또는 종료 상태에서는 평가대상을 추가할 수 없습니다.'));
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        'Calibration 또는 종료 상태에서는 평가대상을 추가할 수 없습니다.',
+      ),
+    );
   }
 
   const { supabase } = await requireHrAdmin();
+
+  const [
+    { data: firstEvaluator, error: firstError },
+    { data: secondEvaluator, error: secondError },
+    { data: targets, error: targetError },
+  ] = await Promise.all([
+    supabase
+      .from('employees')
+      .select('id,is_leader,position_id,positions(evaluation_role)')
+      .eq('id', firstEvaluatorId)
+      .neq('employment_status', 'resigned')
+      .single(),
+    supabase
+      .from('employees')
+      .select('id,position_id,positions(evaluation_role)')
+      .eq('id', secondEvaluatorId)
+      .neq('employment_status', 'resigned')
+      .single(),
+    supabase
+      .from('employees')
+      .select('id,leader_id')
+      .in('id', employeeIds)
+      .neq('employment_status', 'resigned'),
+  ]);
+
+  const validationError = firstError || secondError || targetError;
+  if (validationError) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', validationError.message));
+  }
+
+  const firstPosition = Array.isArray(firstEvaluator?.positions)
+    ? firstEvaluator?.positions[0]
+    : firstEvaluator?.positions;
+
+  const secondPosition = Array.isArray(secondEvaluator?.positions)
+    ? secondEvaluator?.positions[0]
+    : secondEvaluator?.positions;
+
+  if (
+    !firstEvaluator ||
+    (!firstEvaluator.is_leader && firstPosition?.evaluation_role !== 'leader')
+  ) {
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        '1차 평가자는 직책관리에서 리더로 지정된 직원만 선택할 수 있습니다.',
+      ),
+    );
+  }
+
+  if (!secondEvaluator || secondPosition?.evaluation_role !== 'executive') {
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        '2차 평가자는 직책관리에서 임원으로 지정된 직원만 선택할 수 있습니다.',
+      ),
+    );
+  }
+
+  const invalidTarget = (targets ?? []).find(
+    (employee) => employee.leader_id !== firstEvaluatorId,
+  );
+
+  if (invalidTarget || (targets ?? []).length !== employeeIds.length) {
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        '선택된 평가대상 중 해당 리더 소속이 아닌 구성원이 있습니다. 직원관리의 리더 지정값을 확인해주세요.',
+      ),
+    );
+  }
 
   const rows = employeeIds.map((employeeId) => ({
     period_id: periodId,
@@ -370,25 +484,48 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       });
 
       if (snapshotError && !snapshotError.message.includes('snapshot already exists')) {
-        redirect(messageUrl(`/periods/${periodId}`, 'error', `대상은 추가했지만 Snapshot 생성에 실패했습니다: ${snapshotError.message}`));
+        redirect(
+          messageUrl(
+            `/periods/${periodId}`,
+            'error',
+            `대상은 추가했지만 Snapshot 생성에 실패했습니다: ${snapshotError.message}`,
+          ),
+        );
       }
     }
   }
 
   revalidatePath(`/periods/${periodId}`);
   revalidatePath('/periods');
-  redirect(messageUrl(`/periods/${periodId}`, 'success', `${inserted?.length ?? 0}명의 평가대상을 추가했습니다.`));
+
+  redirect(
+    messageUrl(
+      `/periods/${periodId}`,
+      'success',
+      `${inserted?.length ?? 0}명을 평가대상으로 등록했습니다. 1차평가자=리더, 2차평가자=임원으로 지정되었습니다.`,
+    ),
+  );
 }
 
-export async function updateAssignment(periodId: string, assignmentId: string, formData: FormData) {
+export async function updateAssignment(
+  periodId: string,
+  assignmentId: string,
+  formData: FormData,
+) {
   const status = await getPeriodStatus(periodId);
 
   if (!['draft', 'scheduled'].includes(status)) {
-    redirect(messageUrl(`/periods/${periodId}`, 'error', '평가가 시작된 이후에는 평가자/Template을 직접 변경할 수 없습니다.'));
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        '평가가 시작된 이후에는 평가자/Template을 직접 변경할 수 없습니다.',
+      ),
+    );
   }
 
-  const firstEvaluatorId = optionalText(formData.get('first_evaluator_id'));
-  const secondEvaluatorId = optionalText(formData.get('second_evaluator_id'));
+  const firstEvaluatorId = requiredText(formData.get('first_evaluator_id'));
+  const secondEvaluatorId = requiredText(formData.get('second_evaluator_id'));
   const templateId = requiredText(formData.get('template_id'));
 
   if (!z.string().uuid().safeParse(templateId).success) {
@@ -396,6 +533,69 @@ export async function updateAssignment(periodId: string, assignmentId: string, f
   }
 
   const { supabase } = await requireHrAdmin();
+
+  const { data: assignment, error: assignmentError } = await supabase
+    .from('evaluation_assignments')
+    .select('employee_id')
+    .eq('id', assignmentId)
+    .eq('period_id', periodId)
+    .single();
+
+  if (assignmentError || !assignment) {
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        assignmentError?.message ?? '평가대상을 찾을 수 없습니다.',
+      ),
+    );
+  }
+
+  const [
+    { data: target },
+    { data: firstEvaluator },
+    { data: secondEvaluator },
+  ] = await Promise.all([
+    supabase.from('employees').select('leader_id').eq('id', assignment.employee_id).single(),
+    supabase
+      .from('employees')
+      .select('id,is_leader,positions(evaluation_role)')
+      .eq('id', firstEvaluatorId)
+      .single(),
+    supabase
+      .from('employees')
+      .select('id,positions(evaluation_role)')
+      .eq('id', secondEvaluatorId)
+      .single(),
+  ]);
+
+  const firstPosition = Array.isArray(firstEvaluator?.positions)
+    ? firstEvaluator?.positions[0]
+    : firstEvaluator?.positions;
+  const secondPosition = Array.isArray(secondEvaluator?.positions)
+    ? secondEvaluator?.positions[0]
+    : secondEvaluator?.positions;
+
+  if (
+    !firstEvaluator ||
+    (!firstEvaluator.is_leader && firstPosition?.evaluation_role !== 'leader')
+  ) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '1차 평가자는 리더만 지정할 수 있습니다.'));
+  }
+
+  if (target?.leader_id !== firstEvaluatorId) {
+    redirect(
+      messageUrl(
+        `/periods/${periodId}`,
+        'error',
+        '선택한 1차 평가자는 해당 구성원의 직원정보상 리더와 다릅니다.',
+      ),
+    );
+  }
+
+  if (!secondEvaluator || secondPosition?.evaluation_role !== 'executive') {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자는 임원만 지정할 수 있습니다.'));
+  }
 
   const { error } = await supabase
     .from('evaluation_assignments')

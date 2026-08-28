@@ -1,3 +1,64 @@
-import Link from 'next/link'; import {notFound} from 'next/navigation'; import {PageShell} from '@/components/ui/PageShell'; import {Card} from '@/components/ui/Card'; import {Notice} from '@/components/hr/Notice'; import {updatePosition} from '@/app/organization/actions'; import {requireHrAdmin} from '@/lib/hr/admin'; import {stringParam} from '@/lib/hr/utils';
-type P=Promise<{id:string}>;type S=Promise<Record<string,string|string[]|undefined>>;
-export default async function Page({params,searchParams}:{params:P;searchParams:S}){const {id}=await params;const sp=await searchParams;const {supabase}=await requireHrAdmin();const {data:x}=await supabase.from('positions').select('id,name,code,sort_order,description').eq('id',id).maybeSingle();if(!x)notFound();const action=updatePosition.bind(null,id);return <PageShell title={`직책 수정 · ${x.name}`} description="직책명과 표시순서를 관리합니다."><Notice success={stringParam(sp.success)} error={stringParam(sp.error)}/><Card><form action={action} className="space-y-4"><div className="grid gap-4 md:grid-cols-3"><label className="text-sm">직책명 *<input name="name" required defaultValue={x.name} className="mt-1 w-full rounded-xl border px-3 py-2.5"/></label><label className="text-sm">코드<input name="code" defaultValue={x.code??''} className="mt-1 w-full rounded-xl border px-3 py-2.5"/></label><label className="text-sm">순서<input name="sort_order" type="number" defaultValue={x.sort_order} className="mt-1 w-full rounded-xl border px-3 py-2.5"/></label></div><label className="block text-sm">설명<textarea name="description" rows={4} defaultValue={x.description??''} className="mt-1 w-full rounded-xl border px-3 py-2.5"/></label><div className="flex justify-end gap-2"><Link href="/organization/positions" className="rounded-xl border px-4 py-2 text-sm">목록</Link><button className="rounded-xl bg-navy-900 px-4 py-2 text-sm font-semibold text-white">저장</button></div></form></Card></PageShell>}
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { PageShell } from '@/components/ui/PageShell';
+import { Card } from '@/components/ui/Card';
+import { Notice } from '@/components/hr/Notice';
+import { updatePosition } from '@/app/organization/actions';
+import { requireHrAdmin } from '@/lib/hr/admin';
+import { stringParam } from '@/lib/hr/utils';
+
+type P=Promise<{id:string}>;
+type S=Promise<Record<string,string|string[]|undefined>>;
+
+export default async function Page({params,searchParams}:{params:P;searchParams:S}) {
+  const {id}=await params;
+  const sp=await searchParams;
+  const {supabase}=await requireHrAdmin();
+
+  const {data:x}=await supabase
+    .from('positions')
+    .select('id,name,code,sort_order,description,evaluation_role')
+    .eq('id',id)
+    .maybeSingle();
+
+  if(!x) notFound();
+
+  const action=updatePosition.bind(null,id);
+
+  return (
+    <PageShell title={`직책 수정 · ${x.name}`} description="직책과 평가자 역할을 관리합니다.">
+      <Notice success={stringParam(sp.success)} error={stringParam(sp.error)}/>
+      <Card>
+        <form action={action} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <label className="text-sm">직책명 *
+              <input name="name" required defaultValue={x.name} className="mt-1 w-full rounded-xl border px-3 py-2.5"/>
+            </label>
+            <label className="text-sm">코드
+              <input name="code" defaultValue={x.code??''} className="mt-1 w-full rounded-xl border px-3 py-2.5"/>
+            </label>
+            <label className="text-sm">평가자 구분
+              <select name="evaluation_role" defaultValue={x.evaluation_role??'none'} className="mt-1 w-full rounded-xl border px-3 py-2.5">
+                <option value="none">일반</option>
+                <option value="leader">1차평가 리더</option>
+                <option value="executive">2차평가 임원</option>
+              </select>
+            </label>
+            <label className="text-sm">순서
+              <input name="sort_order" type="number" defaultValue={x.sort_order} className="mt-1 w-full rounded-xl border px-3 py-2.5"/>
+            </label>
+          </div>
+
+          <label className="block text-sm">설명
+            <textarea name="description" rows={4} defaultValue={x.description??''} className="mt-1 w-full rounded-xl border px-3 py-2.5"/>
+          </label>
+
+          <div className="flex justify-end gap-2">
+            <Link href="/organization/positions" className="rounded-xl border px-4 py-2 text-sm">목록</Link>
+            <button className="rounded-xl bg-navy-900 px-4 py-2 text-sm font-semibold text-white">저장</button>
+          </div>
+        </form>
+      </Card>
+    </PageShell>
+  );
+}

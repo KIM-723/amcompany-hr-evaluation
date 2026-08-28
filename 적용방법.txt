@@ -1,36 +1,60 @@
-평가기간 영구삭제 패치
+Calibration 해제/재실행 + 리더/임원 평가자 자동배정 패치
 
-중요: 새 화면이 새 DB Function을 호출하므로 SQL을 먼저 실행하세요.
+중요: 새 코드가 positions.evaluation_role / calibration_round 컬럼을 사용하므로 SQL 먼저 실행.
 
 [1] Supabase SQL Editor
-1. 018_evaluation_period_permanent_delete.sql 실행
-2. 성공 후 019_evaluation_period_delete_validation.sql 실행
+1. 020_calibration_round_evaluator_roles.sql
+2. 성공 후 021_calibration_evaluator_roles_validation.sql
 
-019 첫 결과:
-- period_delete_function = true
-- service_role_execute = true
+021에서 아래 true 확인
+- start_calibration_function
+- release_calibration_function
+- start_calibration_execute
+- release_calibration_execute
+
+그리고:
+- first_evaluator_candidates
+- second_evaluator_candidates
+
+숫자 확인.
+
+second_evaluator_candidates가 0이면
+직책관리에서 임원 직책을 '2차평가 임원'으로 지정해야 함.
 
 [2] GitHub
 ZIP 압축 해제
 GitHub -> Add file -> Upload files
-아래 폴더 업로드:
-- app
-- components
-- docs
-- supabase
+압축 내 app / components / docs / supabase 전체 업로드
 
 Commit:
-feat: permanent evaluation period deletion
+feat: calibration rounds and evaluator auto assignment
 
 [3] Vercel
-자동배포 -> Ready
+자동 배포 -> Ready
 
-[4] 테스트
-- 테스트용 평가기간 하나 생성
-- 평가대상 / 자기평가 / 1차평가 등 데이터 생성
-- 평가기간 상세 맨 아래 '평가기간 영구삭제'
-- 경고 확인 후 삭제
-- /periods에서 평가기간 사라짐 확인
-- 관련 평가데이터도 함께 사라졌는지 확인
+[4] 직책관리 확인
+/organization/positions
 
-복구 불가 기능이므로 실제 데이터 삭제 전 반드시 평가기간명을 확인하세요.
+각 직책의 평가자 구분을 확인:
+- 일반
+- 1차평가 리더
+- 2차평가 임원
+
+[5] 직원관리 확인
+각 일반 구성원의 '리더'가 실제 1차평가 리더로 지정되어 있어야 함.
+
+[6] 평가기간 테스트
+/periods -> 평가기간 상세
+
+1. 1차 평가자 리더 선택
+2. 해당 리더 소속 구성원이 자동으로 나타나는지 확인
+3. 구성원이 자동 체크되는지 확인
+4. 2차 평가자에는 임원만 나오는지 확인
+5. 평가대상 등록
+
+[7] Calibration 테스트
+진행중 -> Calibration 시작
+Calibration 상태 -> Calibration 해제
+다시 -> Calibration 2차 다시 시작
+
+기존 Calibration 점수 변경이력은 유지됨.

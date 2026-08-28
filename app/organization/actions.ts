@@ -99,11 +99,17 @@ export async function createPosition(formData: FormData) {
   const name = requiredText(formData.get('name'));
   if (!name) go('/organization/positions', 'error', '직책명은 필수입니다.');
   const { supabase } = await requireHrAdmin();
+  const evaluationRole = requiredText(formData.get('evaluation_role')) || 'none';
+  if (!['none','leader','executive'].includes(evaluationRole)) {
+    go('/organization/positions', 'error', '평가자 구분값이 올바르지 않습니다.');
+  }
+
   const { error } = await supabase.from('positions').insert({
     name,
     code: optionalText(formData.get('code')),
     sort_order: integerValue(formData.get('sort_order')),
     description: optionalText(formData.get('description')),
+    evaluation_role: evaluationRole,
     is_active: true,
   });
   if (error) go('/organization/positions', 'error', error.message);
@@ -115,11 +121,17 @@ export async function updatePosition(id: string, formData: FormData) {
   const name = requiredText(formData.get('name'));
   if (!name) go(`/organization/positions/${id}`, 'error', '직책명은 필수입니다.');
   const { supabase } = await requireHrAdmin();
+  const evaluationRole = requiredText(formData.get('evaluation_role')) || 'none';
+  if (!['none','leader','executive'].includes(evaluationRole)) {
+    go(`/organization/positions/${id}`, 'error', '평가자 구분값이 올바르지 않습니다.');
+  }
+
   const { error } = await supabase.from('positions').update({
     name,
     code: optionalText(formData.get('code')),
     sort_order: integerValue(formData.get('sort_order')),
     description: optionalText(formData.get('description')),
+    evaluation_role: evaluationRole,
     updated_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) go(`/organization/positions/${id}`, 'error', error.message);
