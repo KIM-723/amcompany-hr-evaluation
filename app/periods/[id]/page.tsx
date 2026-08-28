@@ -7,6 +7,7 @@ import { PeriodForm } from '@/components/evaluation-period/PeriodForm';
 import { PeriodStatusBadge } from '@/components/evaluation-period/PeriodStatusBadge';
 import { PeriodDeleteButton } from '@/components/evaluation-period/PeriodDeleteButton';
 import { EvaluatorTargetSelector } from '@/components/evaluation-period/EvaluatorTargetSelector';
+import { EvaluationRosterLiveRefresh } from '@/components/evaluation-period/EvaluationRosterLiveRefresh';
 import {
   activatePeriod,
   addEvaluationTargets,
@@ -21,6 +22,9 @@ import {
 } from '@/app/periods/actions';
 import { requireHrAdmin } from '@/lib/hr/admin';
 import { stringParam } from '@/lib/hr/utils';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -119,18 +123,16 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     positions.filter((position) => position.evaluation_role === 'leader').map((position) => position.id),
   );
 
-  const executivePositionIds = new Set(
-    positions.filter((position) => position.evaluation_role === 'executive').map((position) => position.id),
-  );
 
   const divisionHeadPositionIds = new Set(
-    positions.filter((position) => position.evaluation_role === 'division_head').map((position) => position.id),
+    positions
+      .filter((position) => ['division_head', 'executive'].includes(position.evaluation_role))
+      .map((position) => position.id),
   );
 
   const leaders = employees.filter(
     (employee) =>
-      employee.is_leader ||
-      (!!employee.position_id && leaderPositionIds.has(employee.position_id)),
+      !!employee.position_id && leaderPositionIds.has(employee.position_id),
   );
 
   const divisionHeads = employees.filter(
@@ -138,10 +140,6 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
       !!employee.position_id && divisionHeadPositionIds.has(employee.position_id),
   );
 
-  const executives = employees.filter(
-    (employee) =>
-      !!employee.position_id && executivePositionIds.has(employee.position_id),
-  );
 
   const availableEmployees = employees.filter(
     (employee) => !assignedEmployeeIds.has(employee.id),
@@ -156,8 +154,10 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
     position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
     evaluator_role: employee.position_id
-      ? positionMap.get(employee.position_id)?.evaluation_role ?? (employee.is_leader ? 'leader' : 'none')
-      : (employee.is_leader ? 'leader' : 'none'),
+      ? positionMap.get(employee.position_id)?.evaluation_role === 'executive'
+        ? 'division_head'
+        : positionMap.get(employee.position_id)?.evaluation_role ?? 'none'
+      : 'none',
   }));
 
   const selectorLeaders = leaders.map((employee) => ({
@@ -169,8 +169,10 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
     position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
     evaluator_role: employee.position_id
-      ? positionMap.get(employee.position_id)?.evaluation_role ?? (employee.is_leader ? 'leader' : 'none')
-      : (employee.is_leader ? 'leader' : 'none'),
+      ? positionMap.get(employee.position_id)?.evaluation_role === 'executive'
+        ? 'division_head'
+        : positionMap.get(employee.position_id)?.evaluation_role ?? 'none'
+      : 'none',
   }));
 
   const selectorDivisionHeads = divisionHeads.map((employee) => ({
@@ -184,18 +186,11 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     evaluator_role: 'division_head' as const,
   }));
 
-  const selectorExecutives = executives.map((employee) => ({
-    id: employee.id,
-    employee_no: employee.employee_no,
-    name: employee.name,
-    department_id: employee.department_id,
-    department_name: employee.department_id ? departmentMap.get(employee.department_id) ?? '' : '',
-    job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
-    position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
-    evaluator_role: employee.position_id
-      ? positionMap.get(employee.position_id)?.evaluation_role ?? (employee.is_leader ? 'leader' : 'none')
-      : (employee.is_leader ? 'leader' : 'none'),
-  }));
+
+  const firstEvaluatorOptions = Array.from(
+    new Map([...leaders, ...divisionHeads].map((employee) => [employee.id, employee])).values(),
+  );
+  const unassignedCount = availableEmployees.length;
 
   const editableAssignments = ['draft', 'scheduled'].includes(period.status);
   const canAddTargets = !['calibration', 'closed'].includes(period.status);
@@ -206,7 +201,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
   return (
     <PageShell
       title={period.name}
-      description="리더 소속 구성원을 자동 배정하고 1차=리더, 2차=임원 체계로 평가자를 관리합니다."
+      description="현재 직원목록을 실시간 반영해 일반 구성원은 부서장, 2차는 본부장 기준으로 평가자를 배정합니다."
     >
       <Notice success={stringParam(sp.success)} error={stringParam(sp.error)} />
 
@@ -296,13 +291,19 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
       </Card>
 
       <Card>
-        <div className="mb-4">
-          <h2 className="font-bold">평가대상 자동배정</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            <b>일반 구성원 평가</b>는 리더 선택 → 같은 부서 일반 구성원 자동조회,
-            <b>리더 평가</b>는 본부장 선택 → 해당 본부 산하 부서 리더 자동조회 방식입니다.
-            2차 평가자는 <b>임원</b>만 선택할 수 있습니다.
-          </p>
+        <div className="mb-4 space-y-3">
+          <div>
+            <h2 className="font-bold">평가대상 자동배정</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              <b>일반 구성원 평가</b>는 부서장 선택 → 같은 부서 일반 구성원 자동조회,
+              <b>부서장 평가</b>는 본부장 선택 → 해당 본부 산하 부서장 자동조회 방식입니다.
+              2차 평가자는 <b>본부장</b>으로 지정합니다.
+            </p>
+          </div>
+          <EvaluationRosterLiveRefresh
+            currentEmployeeCount={employees.length}
+            unassignedCount={unassignedCount}
+          />
         </div>
 
         {!canAddTargets ? (
@@ -315,7 +316,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
           </div>
         ) : leaders.length === 0 ? (
           <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
-            1차 평가자로 사용할 리더가 없습니다. 직원관리의 리더 여부 또는 직책관리의 평가자 구분을 확인해주세요.
+            1차 평가자로 사용할 부서장이 없습니다. 직책관리에서 해당 직책을 부서장으로 지정해주세요.
           </div>
         ) : (
           <EvaluatorTargetSelector
@@ -323,7 +324,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
             templates={templates}
             leaders={selectorLeaders}
             divisionHeads={selectorDivisionHeads}
-            executives={selectorExecutives}
+            executives={selectorDivisionHeads}
             employees={selectorEmployees}
             departments={departments}
           />
@@ -334,7 +335,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
         <div className="mb-3">
           <h2 className="text-lg font-bold">평가대상 / 평가자 지정</h2>
           <p className="mt-1 text-xs text-slate-500">
-            평가 시작 전에는 개별 수정할 수 있습니다. 1차 평가자는 대상자와 같은 부서의 리더여야 합니다.
+            평가 시작 전에는 개별 수정할 수 있습니다. 일반 구성원의 1차 평가자는 같은 부서 부서장, 2차 평가자는 본부장입니다.
           </p>
         </div>
 
@@ -377,7 +378,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
                     </label>
 
                     <label className="text-xs font-semibold text-slate-600">
-                      1차 평가자 · 리더
+                      1차 평가자
                       <select
                         name="first_evaluator_id"
                         required
@@ -386,16 +387,16 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
                         className="mt-1 w-full rounded-lg border px-2 py-2 text-sm disabled:bg-slate-50"
                       >
                         <option value="">선택</option>
-                        {leaders.map((leader) => (
-                          <option key={leader.id} value={leader.id}>
-                            {leader.name}
+                        {firstEvaluatorOptions.map((evaluator) => (
+                          <option key={evaluator.id} value={evaluator.id}>
+                            {evaluator.name}
                           </option>
                         ))}
                       </select>
                     </label>
 
                     <label className="text-xs font-semibold text-slate-600">
-                      2차 평가자 · 임원
+                      2차 평가자 · 본부장
                       <select
                         name="second_evaluator_id"
                         required
@@ -404,9 +405,9 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
                         className="mt-1 w-full rounded-lg border px-2 py-2 text-sm disabled:bg-slate-50"
                       >
                         <option value="">선택</option>
-                        {executives.map((executive) => (
-                          <option key={executive.id} value={executive.id}>
-                            {executive.name}
+                        {divisionHeads.map((head) => (
+                          <option key={head.id} value={head.id}>
+                            {head.name}
                           </option>
                         ))}
                       </select>

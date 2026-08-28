@@ -366,7 +366,7 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
   }
 
   if (!z.string().uuid().safeParse(secondEvaluatorId).success) {
-    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자인 임원을 선택해주세요.'));
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자인 본부장을 선택해주세요.'));
   }
 
   const status = await getPeriodStatus(periodId);
@@ -424,12 +424,12 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
     ? secondEvaluator?.positions[0]
     : secondEvaluator?.positions;
 
-  if (!secondEvaluator || secondPosition?.evaluation_role !== 'executive') {
+  if (!secondEvaluator || !['division_head', 'executive'].includes(secondPosition?.evaluation_role ?? 'none')) {
     redirect(
       messageUrl(
         `/periods/${periodId}`,
         'error',
-        '2차 평가자는 직책관리에서 임원으로 지정된 직원만 선택할 수 있습니다.',
+        '2차 평가자는 직책관리에서 본부장으로 지정된 직원만 선택할 수 있습니다.',
       ),
     );
   }
@@ -446,15 +446,14 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
 
   if (assignmentMode === 'member') {
     const firstIsLeader =
-      !!firstEvaluator &&
-      (firstEvaluator.is_leader || firstPosition?.evaluation_role === 'leader');
+      !!firstEvaluator && firstPosition?.evaluation_role === 'leader';
 
     if (!firstIsLeader) {
       redirect(
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '일반 구성원 평가의 1차 평가자는 리더만 선택할 수 있습니다.',
+          '일반 구성원 평가의 1차 평가자는 부서장만 선택할 수 있습니다.',
         ),
       );
     }
@@ -467,7 +466,6 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       return (
         employee.id === firstEvaluatorId ||
         employee.department_id !== firstEvaluator.department_id ||
-        employee.is_leader ||
         ['leader','division_head','executive'].includes(position?.evaluation_role ?? 'none')
       );
     });
@@ -482,12 +480,12 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       );
     }
   } else {
-    if (firstPosition?.evaluation_role !== 'division_head') {
+    if (!['division_head', 'executive'].includes(firstPosition?.evaluation_role ?? 'none')) {
       redirect(
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '리더 평가의 1차 평가자는 본부장만 선택할 수 있습니다.',
+          '부서장 평가의 1차 평가자는 본부장만 선택할 수 있습니다.',
         ),
       );
     }
@@ -529,7 +527,7 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '리더 평가는 선택한 본부장 산하 부서의 리더만 등록할 수 있습니다.',
+          '부서장 평가는 선택한 본부장 산하 부서의 부서장만 등록할 수 있습니다.',
         ),
       );
     }
@@ -587,8 +585,8 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       `/periods/${periodId}`,
       'success',
       assignmentMode === 'member'
-        ? `${inserted?.length ?? 0}명 등록 · 1차 리더 / 2차 임원으로 지정했습니다.`
-        : `${inserted?.length ?? 0}명의 리더 등록 · 1차 본부장 / 2차 임원으로 지정했습니다.`,
+        ? `${inserted?.length ?? 0}명 등록 · 1차 부서장 / 2차 본부장으로 지정했습니다.`
+        : `${inserted?.length ?? 0}명의 부서장 등록 · 1차 본부장 / 2차 본부장으로 지정했습니다.`,
     ),
   );
 }
@@ -669,20 +667,18 @@ export async function updateAssignment(
     ? secondEvaluator?.positions[0]
     : secondEvaluator?.positions;
 
-  if (!secondEvaluator || secondPosition?.evaluation_role !== 'executive') {
-    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자는 임원만 지정할 수 있습니다.'));
+  if (!secondEvaluator || !['division_head', 'executive'].includes(secondPosition?.evaluation_role ?? 'none')) {
+    redirect(messageUrl(`/periods/${periodId}`, 'error', '2차 평가자는 본부장만 지정할 수 있습니다.'));
   }
 
   if (!target?.department_id || !firstEvaluator?.department_id) {
     redirect(messageUrl(`/periods/${periodId}`, 'error', '대상자 또는 1차 평가자의 부서가 없습니다.'));
   }
 
-  const targetIsLeader =
-    targetPosition?.evaluation_role === 'leader' || target.is_leader;
+  const targetIsLeader = targetPosition?.evaluation_role === 'leader';
 
   if (!targetIsLeader) {
-    const firstIsLeader =
-      firstPosition?.evaluation_role === 'leader' || firstEvaluator.is_leader;
+    const firstIsLeader = firstPosition?.evaluation_role === 'leader';
 
     if (
       !firstIsLeader ||
@@ -693,17 +689,17 @@ export async function updateAssignment(
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '일반 구성원의 1차 평가자는 같은 부서의 리더여야 합니다.',
+          '일반 구성원의 1차 평가자는 같은 부서의 부서장이어야 합니다.',
         ),
       );
     }
   } else {
-    if (firstPosition?.evaluation_role !== 'division_head') {
+    if (!['division_head', 'executive'].includes(firstPosition?.evaluation_role ?? 'none')) {
       redirect(
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '리더의 1차 평가자는 본부장이어야 합니다.',
+          '부서장의 1차 평가자는 본부장이어야 합니다.',
         ),
       );
     }
@@ -733,7 +729,7 @@ export async function updateAssignment(
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '선택한 본부장의 산하 조직에 속한 리더가 아닙니다.',
+          '선택한 본부장의 산하 조직에 속한 부서장이 아닙니다.',
         ),
       );
     }

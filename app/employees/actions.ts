@@ -75,6 +75,7 @@ function revalidateEmployeeAreas(employeeId?: string) {
   revalidatePath('/employees');
   if (employeeId) revalidatePath(`/employees/${employeeId}`);
   revalidatePath('/organization');
+  revalidatePath('/periods', 'layout');
   revalidatePath('/dashboard');
   revalidatePath('/observations');
   revalidatePath('/evaluations/self');

@@ -358,6 +358,8 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
 
   revalidatePath('/employees');
   revalidatePath('/organization');
+  revalidatePath('/periods', 'layout');
+  revalidatePath('/dashboard');
 
   return {
     ok: true, inserted, skipped, errors: [],

@@ -40,9 +40,8 @@ export default async function Page({params,searchParams}:{params:P;searchParams:
             <label className="text-sm">평가자 구분
               <select name="evaluation_role" defaultValue={x.evaluation_role??'none'} className="mt-1 w-full rounded-xl border px-3 py-2.5">
                 <option value="none">일반</option>
-                <option value="leader">1차평가 리더</option>
-                <option value="division_head">리더 1차평가 본부장</option>
-                <option value="executive">2차평가 임원</option>
+                <option value="leader">부서장</option>
+                <option value="division_head">본부장</option>
               </select>
             </label>
             <label className="text-sm">순서
