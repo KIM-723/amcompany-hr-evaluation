@@ -1,43 +1,15 @@
-직원 삭제 / 일괄삭제 / 퇴사일 / 퇴사자 평가표시 패치
+Excel 업로드 JWT issued at future 자동 재시도 패치
 
-[1] GitHub
-ZIP 압축 해제
-GitHub -> Add file -> Upload files
-아래 폴더 전체 업로드
-- app
-- components
-- supabase
-Commit:
-feat: employee deletion and resignation handling
+1. GitHub -> app -> employees -> import -> actions.ts
+2. 기존 actions.ts를 이 패치 파일로 교체
+3. Commit:
+   fix: retry excel import on jwt clock skew
+4. Supabase SQL 실행 없음
+5. Vercel 자동배포 Ready 확인
+6. Excel 업로드 다시 시도
 
-[2] Supabase SQL Editor
-순서대로 실행
-1. supabase/migrations/016_employee_delete_resignation.sql
-2. 성공 후 supabase/migrations/017_employee_delete_resignation_validation.sql
+이 패치는 JWT issued at future 오류일 때만
+약 1.5초 -> 4초 -> 8초 간격으로 자동 재시도합니다.
 
-017에서 아래가 true인지 확인
-- single_delete_function
-- bulk_delete_function
-- resignation_sync_function
-- single_delete_execute
-- bulk_delete_execute
-
-표 목록의 has_resigned_flag / has_resignation_date가 모두 1이면 정상.
-
-[3] Vercel
-GitHub Commit 후 자동배포 -> Ready
-
-[4] 테스트
-1. 테스트 직원 하나 생성
-2. 상세에서 퇴사일 입력 + 퇴사 처리
-3. 1차평가/2차/결과 화면에서 '퇴사자 · 날짜' 표시 확인
-4. 다시 재직으로 변경 -> 퇴사자 표시 해제 확인
-5. 테스트 직원에 평가데이터를 만든 뒤 직원 영구삭제
-6. 직원목록에서 체크박스 2명 선택 -> 일괄삭제 확인
-
-주의
-영구삭제는 복구 불가.
-해당 직원 본인의 모든 진단/평가/관찰/성장 데이터와
-해당 직원이 평가자로 작성한 평가도 함께 삭제됨.
-다른 직원 평가배정에서 그 직원의 1차/2차 평가자 지정은 해제됨.
-로그인 연결 profile은 비활성 처리되지만 auth.users 계정 자체는 삭제하지 않음.
+그래도 계속 실패하면 Supabase Dashboard에서 프로젝트 재시작 후 다시 시도하거나
+Supabase Support에 문의해야 합니다.

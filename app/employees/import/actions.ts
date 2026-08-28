@@ -40,6 +40,37 @@ export type BulkImportResult = {
 
 type ImportRow = z.infer<typeof rowSchema>;
 
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isJwtIssuedAtFuture(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const message = 'message' in error ? String((error as { message?: unknown }).message ?? '') : '';
+  return message.toLowerCase().includes('jwt issued at future');
+}
+
+async function withJwtFutureRetry<T extends { error?: unknown }>(
+  request: () => PromiseLike<T>,
+): Promise<T> {
+  const waits = [0, 1500, 4000, 8000];
+  let lastResult: T | null = null;
+
+  for (const wait of waits) {
+    if (wait > 0) await sleep(wait);
+
+    const result = await request();
+    lastResult = result;
+
+    if (!isJwtIssuedAtFuture(result.error)) {
+      return result;
+    }
+  }
+
+  return lastResult as T;
+}
+
 function normalize(value: unknown) {
   if (value == null) return '';
   return String(value).trim();
@@ -142,10 +173,10 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
     { data: positions, error: positionError },
     { data: currentEmployees, error: employeeError },
   ] = await Promise.all([
-    supabase.from('departments').select('id,name').eq('is_active', true),
-    supabase.from('job_levels').select('id,name').eq('is_active', true),
-    supabase.from('positions').select('id,name').eq('is_active', true),
-    supabase.from('employees').select('id,employee_no,name'),
+    withJwtFutureRetry(() => supabase.from('departments').select('id,name').eq('is_active', true)),
+    withJwtFutureRetry(() => supabase.from('job_levels').select('id,name').eq('is_active', true)),
+    withJwtFutureRetry(() => supabase.from('positions').select('id,name').eq('is_active', true)),
+    withJwtFutureRetry(() => supabase.from('employees').select('id,employee_no,name')),
   ]);
 
   const initialError = departmentError || jobLevelError || positionError || employeeError;
@@ -153,7 +184,9 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
     return {
       ok: false, inserted: 0, skipped: 0,
       errors: [{ row: 0, message: initialError.message }],
-      message: '기준정보를 불러오지 못했습니다.',
+      message: isJwtIssuedAtFuture(initialError)
+        ? 'Supabase 서버 시간 동기화 문제로 요청이 거절되었습니다. 잠시 후 다시 시도하거나 Supabase 프로젝트를 재시작해주세요.'
+        : '기준정보를 불러오지 못했습니다.',
     };
   }
 
@@ -259,7 +292,9 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
 
   for (let i = 0; i < validRows.length; i += 200) {
     const chunk = validRows.slice(i, i + 200);
-    const { error } = await supabase.from('employees').insert(chunk.map((x) => x.payload));
+    const { error } = await withJwtFutureRetry(
+      () => supabase.from('employees').insert(chunk.map((x) => x.payload)),
+    );
 
     if (error) {
       return {
