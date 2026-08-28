@@ -1,43 +1,24 @@
-부서장 평가 조회 0명 Fallback Hotfix
-
-현재 문제:
-본부장 직원의 소속부서(예: 임원)에 departments.parent_id로 연결된
-산하조직이 없으면 기존 로직은 조회 결과가 0명이 됨.
+조직정보 자동반영 UX 정리 Hotfix
 
 변경:
-1. 본부장 소속조직에 산하조직 연결이 있으면
-   -> 해당 산하 전체 조직의 부서장/리더만 조회
+- '조직정보 자동동기화' 표시 제거
+- '지금 새로고침' 버튼 제거
+- 3초마다 자동조회(polling) 제거
+- 사용자가 수동 새로고침할 필요 없음
 
-2. 산하조직 연결이 하나도 없으면
-   -> 전체 재직 부서장/리더를 자동 조회
-   -> 전원 자동체크
-   -> 필요한 사람만 체크 해제 가능
+동작:
+1. 직원/조직정보 저장 순간 DB는 즉시 변경
+2. Server Action에서 평가 관련 경로 캐시 자동 무효화
+3. 평가기간 화면에 다시 들어가면 최신 DB로 렌더링
+4. 다른 탭에서 수정 후 평가기간 탭으로 돌아오면 자동 재조회
+5. 브라우저 뒤로가기로 오래된 화면이 복원된 경우 자동 재조회
 
-3. DB 등록 검증도 같은 fallback 규칙 적용
+즉 사용자는 새로고침 기능을 신경쓰지 않아도 됩니다.
 
-4. 부서장평가 2차 평가자 선택사항 기능 유지
-
-적용 순서
-
-[1] GitHub 먼저
-ZIP 압축 해제
-app / components / supabase 업로드
-
-Commit:
-fix: fallback to all department heads when org hierarchy missing
-
-[2] Supabase SQL
-030_head_evaluation_suborg_fallback.sql
-성공 후
-031_head_evaluation_suborg_fallback_validation.sql
-
-031 첫 결과:
-- has_descendant_function = true
-- descendant_department_function = true
-- evaluator_validation_function = true
-
-[3] Vercel Ready 후 다시 테스트
-
-본부장 선택 후 조직 상위관계가 없으면 화면에:
-'전체 재직 부서장/리더 · N명'
-으로 표시됨.
+적용:
+1. GitHub -> components -> evaluation-period
+2. EvaluationRosterLiveRefresh.tsx 교체
+3. Commit:
+   refactor: sync organization data automatically without refresh ui
+4. Supabase SQL 작업 없음
+5. Vercel Ready 확인
