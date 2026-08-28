@@ -1,74 +1,15 @@
-리더 -> 본부장 평가 자동배정 패치
+본부장 평가 자동배정 Build 오류 Hotfix
 
-최종 평가자 규칙:
-1. 일반 구성원
-   1차 = 같은 부서 리더
-   2차 = 임원
+오류:
+An object literal cannot have multiple properties with the same name.
+department_id 중복 선언
 
-2. 리더
-   1차 = 상위 본부의 본부장
-   2차 = 임원
+적용:
+1. GitHub -> app -> periods -> [id] -> page.tsx
+2. 기존 page.tsx를 이 파일로 교체
+3. Commit:
+   fix: remove duplicate department id in leader evaluation
+4. Supabase SQL 작업 없음
+5. Vercel 자동배포 확인
 
-리더십 평가문항은 이번 패치에 포함하지 않음.
-
-[1] Supabase SQL Editor
-1. 024_leader_division_head_evaluation.sql
-2. 성공 후 025_leader_division_head_validation.sql
-
-025 확인:
-- descendant_department_function = true
-- evaluator_validation_function = true
-- leader_candidates 숫자 > 0
-- division_head_candidates 숫자 > 0
-- executive_candidates 숫자 > 0
-
-[2] 직책관리
-/organization/positions
-
-직책 구분:
-- 일반
-- 1차평가 리더
-- 리더 1차평가 본부장
-- 2차평가 임원
-
-본부장 직책은 반드시
-'리더 1차평가 본부장'
-으로 지정.
-
-[3] 조직관리
-본부와 부서의 상위조직 관계(parent_id)가 연결되어 있어야 함.
-
-예:
-섬유본부
- ├ 국내섬유영업부
- ├ 해외섬유영업부
- └ 생산관리부
-
-본부장은 '섬유본부' 소속.
-리더는 각 하위 부서 소속.
-
-[4] GitHub
-ZIP 압축 해제
-GitHub -> Add file -> Upload files
-app / components / supabase 업로드
-
-Commit:
-feat: division head evaluates department leaders
-
-[5] 평가기간 테스트
-
-A. 일반 구성원 평가
-- 평가대상 구분 = 일반 구성원 평가
-- 리더 선택
-- 같은 부서 일반 구성원 전원 자동조회/체크
-- 임원 선택
-- 등록
-
-B. 리더 평가
-- 평가대상 구분 = 리더 평가
-- 본부장 선택
-- 해당 본부 산하 부서의 리더만 자동조회/체크
-- 임원 선택
-- 등록
-
-중복 평가대상자는 기존 평가기간에 이미 등록되어 있으면 조회목록에서 제외됨.
+024 / 025 SQL은 이미 실행했다면 다시 실행할 필요 없습니다.
