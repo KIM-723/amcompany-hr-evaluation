@@ -22,13 +22,15 @@ function text(value: unknown) {
   return String(value).trim();
 }
 
-function cell(rows: unknown[][], row: number, col: number) {
-  return text(rows[row - 1]?.[col - 1]);
+function sheetCell(sheet: XLSX.WorkSheet, address: string) {
+  return text(sheet[address]?.v);
 }
 
 function parseWorkbook(fileName: string, buffer: ArrayBuffer): ParsedFile {
   const workbook = XLSX.read(buffer, { type: 'array' });
+
   const sheetName =
+    workbook.SheetNames.find((name) => name.trim() === '성장방향성') ??
     workbook.SheetNames.find((name) => name.trim() === '미팅내용') ??
     workbook.SheetNames[0];
 
@@ -47,54 +49,96 @@ function parseWorkbook(fileName: string, buffer: ArrayBuffer): ParsedFile {
   }
 
   const sheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: '',
-    raw: false,
-  });
 
+  // 중요:
+  // sheet_to_json(header: 1)은 워크시트의 !ref 시작행부터 배열 index 0을 잡기 때문에
+  // 첫 사용행이 2행인 현재 양식에서는 전체 행이 1칸씩 밀려 읽힐 수 있다.
+  // AMCOMPANY 양식은 실제 셀 주소를 직접 읽어 절대 행 기준으로 파싱한다.
   const diagnosisSummary: DiagnosisSummaryItem[] = [
-    { category: '성장', content: cell(rows, 11, 3), evidence: cell(rows, 11, 4) },
-    { category: '신뢰', content: cell(rows, 12, 3), evidence: cell(rows, 12, 4) },
-    { category: '전문성', content: cell(rows, 13, 3), evidence: cell(rows, 13, 4) },
-    { category: '감각', content: cell(rows, 14, 3), evidence: cell(rows, 14, 4) },
+    {
+      category: '성장',
+      content: sheetCell(sheet, 'C11'),
+      evidence: sheetCell(sheet, 'D11'),
+    },
+    {
+      category: '신뢰',
+      content: sheetCell(sheet, 'C12'),
+      evidence: sheetCell(sheet, 'D12'),
+    },
+    {
+      category: '전문성',
+      content: sheetCell(sheet, 'C13'),
+      evidence: sheetCell(sheet, 'D13'),
+    },
+    {
+      category: '감각',
+      content: sheetCell(sheet, 'C14'),
+      evidence: sheetCell(sheet, 'D14'),
+    },
   ];
 
   const growthPoints: GrowthPointItem[] = [
-    { category: '성과', detail: cell(rows, 19, 3), reason: cell(rows, 19, 4) },
-    { category: '역량', detail: cell(rows, 20, 3), reason: cell(rows, 20, 4) },
-    { category: '태도', detail: cell(rows, 21, 3), reason: cell(rows, 21, 4) },
+    {
+      category: '성과',
+      detail: sheetCell(sheet, 'C19'),
+      reason: sheetCell(sheet, 'D19'),
+    },
+    {
+      category: '역량',
+      detail: sheetCell(sheet, 'C20'),
+      reason: sheetCell(sheet, 'D20'),
+    },
+    {
+      category: '태도',
+      detail: sheetCell(sheet, 'C21'),
+      reason: sheetCell(sheet, 'D21'),
+    },
   ];
 
   const growthDirections: GrowthDirectionItem[] = [26, 27, 28]
     .map((row) => ({
-      area: [cell(rows, row, 2), cell(rows, row, 3)]
+      area: [
+        sheetCell(sheet, `B${row}`),
+        sheetCell(sheet, `C${row}`),
+      ]
         .filter(Boolean)
         .join(' ')
         .trim(),
-      action: cell(rows, row, 4),
+      action: sheetCell(sheet, `D${row}`),
     }))
     .filter((item) => item.area || item.action);
 
-  const commentHeadingIndex = rows.findIndex((row) =>
-    row.some((value) => text(value).includes('4. 기타 코멘트')),
-  );
+  // 현재 AMCOMPANY 양식은 기타 코멘트가 B31의 병합 셀에 입력된다.
+  // 향후 행이 추가된 파일을 대비해 B31:D36 중 첫 비어있지 않은 실제 입력도 함께 확인한다.
+  let otherComment = sheetCell(sheet, 'B31');
 
-  let otherComment = '';
-  if (commentHeadingIndex >= 0) {
-    otherComment = rows
-      .slice(commentHeadingIndex + 1, commentHeadingIndex + 6)
-      .flat()
-      .map(text)
-      .filter(Boolean)
-      .join('\n');
+  if (!otherComment) {
+    for (let row = 31; row <= 36; row += 1) {
+      const candidate = [
+        sheetCell(sheet, `B${row}`),
+        sheetCell(sheet, `C${row}`),
+        sheetCell(sheet, `D${row}`),
+      ]
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+
+      if (candidate) {
+        otherComment = candidate;
+        break;
+      }
+    }
   }
 
   const payload: ParsedFile = {
     file_name: fileName,
-    department: cell(rows, 4, 3),
-    job_level: cell(rows, 5, 3),
-    employee_name: cell(rows, 6, 3),
+
+    // 실제 첨부양식 기준
+    // C4 = 부서 / C5 = 직무레벨 / C6 = 성명
+    department: sheetCell(sheet, 'C4'),
+    job_level: sheetCell(sheet, 'C5'),
+    employee_name: sheetCell(sheet, 'C6'),
+
     diagnosis_summary: diagnosisSummary,
     growth_points: growthPoints,
     growth_directions: growthDirections,
@@ -102,7 +146,8 @@ function parseWorkbook(fileName: string, buffer: ArrayBuffer): ParsedFile {
   };
 
   if (!payload.employee_name) {
-    payload.parse_error = '성명(C6)을 읽을 수 없습니다.';
+    payload.parse_error =
+      '성명(C6)을 읽을 수 없습니다. AMCOMPANY 인사진단 양식의 C6 셀을 확인해주세요.';
   }
 
   return payload;
