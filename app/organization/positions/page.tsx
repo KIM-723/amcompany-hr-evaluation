@@ -11,6 +11,7 @@ type S = Promise<Record<string,string|string[]|undefined>>;
 const roleLabel: Record<string,string> = {
   none: '일반',
   leader: '1차평가 리더',
+  division_head: '리더 1차평가 본부장',
   executive: '2차평가 임원',
 };
 
@@ -66,7 +67,9 @@ export default async function Page({searchParams}:{searchParams:S}) {
                       <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
                         x.evaluation_role==='leader'
                           ? 'bg-blue-50 text-blue-700'
-                          : x.evaluation_role==='executive'
+                          : x.evaluation_role==='division_head'
+                            ? 'bg-indigo-50 text-indigo-700'
+                            : x.evaluation_role==='executive'
                             ? 'bg-violet-50 text-violet-700'
                             : 'bg-slate-100 text-slate-600'
                       }`}>
@@ -98,6 +101,7 @@ export default async function Page({searchParams}:{searchParams:S}) {
               <select name="evaluation_role" defaultValue="none" className="mt-1 w-full rounded-xl border px-3 py-2.5">
                 <option value="none">일반</option>
                 <option value="leader">1차평가 리더</option>
+                <option value="division_head">리더 1차평가 본부장</option>
                 <option value="executive">2차평가 임원</option>
               </select>
             </label>

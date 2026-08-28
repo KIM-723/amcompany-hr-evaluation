@@ -100,7 +100,7 @@ export async function createPosition(formData: FormData) {
   if (!name) go('/organization/positions', 'error', '직책명은 필수입니다.');
   const { supabase } = await requireHrAdmin();
   const evaluationRole = requiredText(formData.get('evaluation_role')) || 'none';
-  if (!['none','leader','executive'].includes(evaluationRole)) {
+  if (!['none','leader','division_head','executive'].includes(evaluationRole)) {
     go('/organization/positions', 'error', '평가자 구분값이 올바르지 않습니다.');
   }
 
@@ -122,7 +122,7 @@ export async function updatePosition(id: string, formData: FormData) {
   if (!name) go(`/organization/positions/${id}`, 'error', '직책명은 필수입니다.');
   const { supabase } = await requireHrAdmin();
   const evaluationRole = requiredText(formData.get('evaluation_role')) || 'none';
-  if (!['none','leader','executive'].includes(evaluationRole)) {
+  if (!['none','leader','division_head','executive'].includes(evaluationRole)) {
     go(`/organization/positions/${id}`, 'error', '평가자 구분값이 올바르지 않습니다.');
   }
 

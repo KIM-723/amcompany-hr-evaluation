@@ -12,59 +12,148 @@ type Person = {
   department_name: string;
   job_level_name: string;
   position_name: string;
+  evaluator_role: 'none' | 'leader' | 'division_head' | 'executive';
 };
+
+type Department = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+};
+
+type Mode = 'member' | 'leader';
 
 export function EvaluatorTargetSelector({
   action,
   templates,
   leaders,
+  divisionHeads,
   executives,
   employees,
+  departments,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   templates: Template[];
   leaders: Person[];
+  divisionHeads: Person[];
   executives: Person[];
   employees: Person[];
+  departments: Department[];
 }) {
-  const [leaderId, setLeaderId] = useState('');
+  const [mode, setMode] = useState<Mode>('member');
+  const [firstEvaluatorId, setFirstEvaluatorId] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const selectedLeader = useMemo(
-    () => leaders.find((leader) => leader.id === leaderId) ?? null,
-    [leaders, leaderId],
+  const firstEvaluators = mode === 'member' ? leaders : divisionHeads;
+
+  const selectedEvaluator = useMemo(
+    () => firstEvaluators.find((person) => person.id === firstEvaluatorId) ?? null,
+    [firstEvaluators, firstEvaluatorId],
   );
 
-  const members = useMemo(() => {
-    if (!selectedLeader?.department_id) return [];
+  const descendantDepartmentIds = useMemo(() => {
+    if (!selectedEvaluator?.department_id) return new Set<string>();
 
+    const result = new Set<string>();
+    let frontier = [selectedEvaluator.department_id];
+
+    // 본부장의 소속 조직 자체는 평가대상 부서에서 제외하고,
+    // 그 하위조직부터 재귀적으로 조회한다.
+    while (frontier.length > 0) {
+      const next: string[] = [];
+
+      for (const department of departments) {
+        if (department.parent_id && frontier.includes(department.parent_id) && !result.has(department.id)) {
+          result.add(department.id);
+          next.push(department.id);
+        }
+      }
+
+      frontier = next;
+    }
+
+    return result;
+  }, [departments, selectedEvaluator]);
+
+  const targets = useMemo(() => {
+    if (!selectedEvaluator?.department_id) return [];
+
+    if (mode === 'member') {
+      // 일반 구성원 평가:
+      // 리더와 동일 부서 / 리더 본인은 제외 / 리더·본부장·임원 직책 제외
+      return employees.filter(
+        (employee) =>
+          employee.department_id === selectedEvaluator.department_id &&
+          employee.id !== selectedEvaluator.id &&
+          employee.evaluator_role === 'none',
+      );
+    }
+
+    // 리더 평가:
+    // 본부장 소속 조직의 하위조직들 중 직책이 리더인 직원만 조회
     return employees.filter(
       (employee) =>
-        employee.department_id === selectedLeader.department_id &&
-        employee.id !== selectedLeader.id,
+        employee.department_id !== null &&
+        descendantDepartmentIds.has(employee.department_id) &&
+        employee.evaluator_role === 'leader',
     );
-  }, [employees, selectedLeader]);
+  }, [employees, mode, selectedEvaluator, descendantDepartmentIds]);
 
-  function selectLeader(nextLeaderId: string) {
-    setLeaderId(nextLeaderId);
+  function changeMode(nextMode: Mode) {
+    setMode(nextMode);
+    setFirstEvaluatorId('');
+    setSelectedIds([]);
+  }
 
-    const leader = leaders.find((item) => item.id === nextLeaderId);
+  function selectFirstEvaluator(nextId: string) {
+    setFirstEvaluatorId(nextId);
 
-    if (!leader?.department_id) {
+    const evaluator = firstEvaluators.find((item) => item.id === nextId);
+    if (!evaluator?.department_id) {
       setSelectedIds([]);
       return;
     }
 
-    const memberIds = employees
-      .filter(
-        (employee) =>
-          employee.department_id === leader.department_id &&
-          employee.id !== leader.id,
-      )
-      .map((employee) => employee.id);
+    if (mode === 'member') {
+      setSelectedIds(
+        employees
+          .filter(
+            (employee) =>
+              employee.department_id === evaluator.department_id &&
+              employee.id !== evaluator.id &&
+              employee.evaluator_role === 'none',
+          )
+          .map((employee) => employee.id),
+      );
+      return;
+    }
 
-    // 리더 선택 즉시 같은 부서의 미등록 재직자 전원을 자동 체크
-    setSelectedIds(memberIds);
+    const descendantIds = new Set<string>();
+    let frontier = [evaluator.department_id];
+
+    while (frontier.length > 0) {
+      const next: string[] = [];
+
+      for (const department of departments) {
+        if (department.parent_id && frontier.includes(department.parent_id) && !descendantIds.has(department.id)) {
+          descendantIds.add(department.id);
+          next.push(department.id);
+        }
+      }
+
+      frontier = next;
+    }
+
+    setSelectedIds(
+      employees
+        .filter(
+          (employee) =>
+            employee.department_id !== null &&
+            descendantIds.has(employee.department_id) &&
+            employee.evaluator_role === 'leader',
+        )
+        .map((employee) => employee.id),
+    );
   }
 
   function toggleEmployee(employeeId: string) {
@@ -76,22 +165,55 @@ export function EvaluatorTargetSelector({
   }
 
   function toggleAll() {
-    const memberIds = members.map((employee) => employee.id);
+    const targetIds = targets.map((employee) => employee.id);
     const allChecked =
-      memberIds.length > 0 && memberIds.every((id) => selectedIds.includes(id));
+      targetIds.length > 0 && targetIds.every((id) => selectedIds.includes(id));
 
     setSelectedIds(
       allChecked
-        ? selectedIds.filter((id) => !memberIds.includes(id))
-        : [...new Set([...selectedIds, ...memberIds])],
+        ? selectedIds.filter((id) => !targetIds.includes(id))
+        : [...new Set([...selectedIds, ...targetIds])],
     );
   }
 
   const allChecked =
-    members.length > 0 && members.every((member) => selectedIds.includes(member.id));
+    targets.length > 0 && targets.every((employee) => selectedIds.includes(employee.id));
+
+  const firstLabel = mode === 'member' ? '1차 평가자 · 리더' : '1차 평가자 · 본부장';
 
   return (
     <form action={action} className="space-y-5">
+      <input type="hidden" name="assignment_mode" value={mode} />
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="text-sm font-bold">평가대상 구분</div>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <label className={`cursor-pointer rounded-xl border px-4 py-3 text-sm ${mode === 'member' ? 'border-blue-400 bg-blue-50 font-bold text-blue-800' : 'bg-white'}`}>
+            <input
+              type="radio"
+              name="mode_radio"
+              checked={mode === 'member'}
+              onChange={() => changeMode('member')}
+              className="mr-2"
+            />
+            일반 구성원 평가
+            <span className="ml-2 text-xs font-normal text-slate-500">같은 부서 리더 → 구성원</span>
+          </label>
+
+          <label className={`cursor-pointer rounded-xl border px-4 py-3 text-sm ${mode === 'leader' ? 'border-violet-400 bg-violet-50 font-bold text-violet-800' : 'bg-white'}`}>
+            <input
+              type="radio"
+              name="mode_radio"
+              checked={mode === 'leader'}
+              onChange={() => changeMode('leader')}
+              className="mr-2"
+            />
+            리더 평가
+            <span className="ml-2 text-xs font-normal text-slate-500">본부장 → 산하부서 리더</span>
+          </label>
+        </div>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <label className="text-sm font-medium">
           평가 Template *
@@ -110,23 +232,25 @@ export function EvaluatorTargetSelector({
         </label>
 
         <label className="text-sm font-medium">
-          1차 평가자 · 리더 *
+          {firstLabel} *
           <select
             name="first_evaluator_id"
-            value={leaderId}
-            onChange={(event) => selectLeader(event.target.value)}
+            value={firstEvaluatorId}
+            onChange={(event) => selectFirstEvaluator(event.target.value)}
             required
             className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5"
           >
-            <option value="">리더 선택</option>
-            {leaders.map((leader) => (
-              <option key={leader.id} value={leader.id}>
-                {leader.employee_no} · {leader.name} · {leader.department_name || '부서 미지정'}
+            <option value="">{mode === 'member' ? '리더 선택' : '본부장 선택'}</option>
+            {firstEvaluators.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.employee_no} · {person.name} · {person.department_name || '부서 미지정'}
               </option>
             ))}
           </select>
           <span className="mt-1 block text-xs font-normal text-slate-400">
-            리더를 선택하면 해당 리더와 같은 부서의 재직자가 자동 조회·체크됩니다.
+            {mode === 'member'
+              ? '리더 선택 → 같은 부서 일반 구성원 자동조회'
+              : '본부장 선택 → 본부 산하 부서의 리더 자동조회'}
           </span>
         </label>
 
@@ -144,36 +268,34 @@ export function EvaluatorTargetSelector({
               </option>
             ))}
           </select>
-          {executives.length === 0 && (
-            <span className="mt-1 block text-xs font-normal text-red-500">
-              직책관리에서 2차평가 임원 직책을 먼저 지정해주세요.
-            </span>
-          )}
         </label>
       </div>
 
-      {!leaderId ? (
+      {!firstEvaluatorId ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-          1차 평가자인 리더를 먼저 선택해주세요.
+          {mode === 'member' ? '리더를 선택해주세요.' : '본부장을 선택해주세요.'}
         </div>
-      ) : !selectedLeader?.department_id ? (
+      ) : !selectedEvaluator?.department_id ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-          선택한 리더의 부서가 지정되어 있지 않습니다. 직원관리에서 리더의 부서를 먼저 지정해주세요.
+          선택한 평가자의 부서가 지정되어 있지 않습니다.
         </div>
-      ) : members.length === 0 ? (
+      ) : targets.length === 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-          <b>{selectedLeader.department_name}</b>에 추가 가능한 미등록 재직자가 없습니다.
+          {mode === 'member'
+            ? `${selectedEvaluator.department_name}에 추가 가능한 일반 구성원이 없습니다.`
+            : `${selectedEvaluator.department_name} 산하 조직에서 추가 가능한 리더가 없습니다.`}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-3">
             <div>
               <div className="font-bold">
-                {selectedLeader.department_name} · {members.length}명 조회
+                {mode === 'member'
+                  ? `${selectedEvaluator.department_name} · 일반 구성원 ${targets.length}명`
+                  : `${selectedEvaluator.department_name} 산하 · 리더 ${targets.length}명`}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                선택한 리더 본인은 제외됩니다. 현재{' '}
-                {selectedIds.filter((id) => members.some((member) => member.id === id)).length}명 선택
+                전원 자동체크됩니다. 필요하면 일부만 해제할 수 있습니다.
               </div>
             </div>
 
@@ -184,7 +306,7 @@ export function EvaluatorTargetSelector({
           </div>
 
           <div className="grid max-h-96 overflow-y-auto md:grid-cols-2 xl:grid-cols-3">
-            {members.map((employee) => {
+            {targets.map((employee) => {
               const checked = selectedIds.includes(employee.id);
 
               return (
@@ -221,8 +343,8 @@ export function EvaluatorTargetSelector({
       <div className="flex justify-end">
         <button
           disabled={
-            !leaderId ||
-            !selectedLeader?.department_id ||
+            !firstEvaluatorId ||
+            !selectedEvaluator?.department_id ||
             selectedIds.length === 0 ||
             executives.length === 0
           }

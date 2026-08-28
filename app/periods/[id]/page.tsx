@@ -39,12 +39,12 @@ type Employee = {
   employment_status: string;
 };
 
-type Department = { id: string; name: string };
+type Department = { id: string; name: string; parent_id: string | null };
 type JobLevel = { id: string; name: string };
 type Position = {
   id: string;
   name: string;
-  evaluation_role: 'none' | 'leader' | 'executive';
+  evaluation_role: 'none' | 'leader' | 'division_head' | 'executive';
 };
 type Template = { id: string; name: string; version: number };
 
@@ -83,7 +83,7 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
       .select('id,employee_no,name,department_id,job_level_id,position_id,leader_id,is_leader,employment_status')
       .neq('employment_status', 'resigned')
       .order('employee_no'),
-    supabase.from('departments').select('id,name').eq('is_active', true).order('sort_order').order('name'),
+    supabase.from('departments').select('id,name,parent_id').eq('is_active', true).order('sort_order').order('name'),
     supabase.from('job_levels').select('id,name').eq('is_active', true).order('level_order'),
     supabase.from('positions').select('id,name,evaluation_role').eq('is_active', true).order('sort_order').order('name'),
     supabase.from('evaluation_templates').select('id,name,version').eq('is_active', true).order('name'),
@@ -123,10 +123,19 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     positions.filter((position) => position.evaluation_role === 'executive').map((position) => position.id),
   );
 
+  const divisionHeadPositionIds = new Set(
+    positions.filter((position) => position.evaluation_role === 'division_head').map((position) => position.id),
+  );
+
   const leaders = employees.filter(
     (employee) =>
       employee.is_leader ||
       (!!employee.position_id && leaderPositionIds.has(employee.position_id)),
+  );
+
+  const divisionHeads = employees.filter(
+    (employee) =>
+      !!employee.position_id && divisionHeadPositionIds.has(employee.position_id),
   );
 
   const executives = employees.filter(
@@ -143,10 +152,13 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     employee_no: employee.employee_no,
     name: employee.name,
     department_id: employee.department_id,
+    department_id: employee.department_id,
     department_name: employee.department_id ? departmentMap.get(employee.department_id) ?? '' : '',
     job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
     position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
-    leader_id: employee.leader_id,
+    evaluator_role: employee.position_id
+      ? positionMap.get(employee.position_id)?.evaluation_role ?? (employee.is_leader ? 'leader' : 'none')
+      : (employee.is_leader ? 'leader' : 'none'),
   }));
 
   const selectorLeaders = leaders.map((employee) => ({
@@ -154,13 +166,16 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     employee_no: employee.employee_no,
     name: employee.name,
     department_id: employee.department_id,
+    department_id: employee.department_id,
     department_name: employee.department_id ? departmentMap.get(employee.department_id) ?? '' : '',
     job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
     position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
-    leader_id: employee.leader_id,
+    evaluator_role: employee.position_id
+      ? positionMap.get(employee.position_id)?.evaluation_role ?? (employee.is_leader ? 'leader' : 'none')
+      : (employee.is_leader ? 'leader' : 'none'),
   }));
 
-  const selectorExecutives = executives.map((employee) => ({
+  const selectorDivisionHeads = divisionHeads.map((employee) => ({
     id: employee.id,
     employee_no: employee.employee_no,
     name: employee.name,
@@ -168,7 +183,21 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
     department_name: employee.department_id ? departmentMap.get(employee.department_id) ?? '' : '',
     job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
     position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
-    leader_id: employee.leader_id,
+    evaluator_role: 'division_head' as const,
+  }));
+
+  const selectorExecutives = executives.map((employee) => ({
+    id: employee.id,
+    employee_no: employee.employee_no,
+    name: employee.name,
+    department_id: employee.department_id,
+    department_id: employee.department_id,
+    department_name: employee.department_id ? departmentMap.get(employee.department_id) ?? '' : '',
+    job_level_name: employee.job_level_id ? jobLevelMap.get(employee.job_level_id) ?? '' : '',
+    position_name: employee.position_id ? positionMap.get(employee.position_id)?.name ?? '' : '',
+    evaluator_role: employee.position_id
+      ? positionMap.get(employee.position_id)?.evaluation_role ?? (employee.is_leader ? 'leader' : 'none')
+      : (employee.is_leader ? 'leader' : 'none'),
   }));
 
   const editableAssignments = ['draft', 'scheduled'].includes(period.status);
@@ -273,8 +302,9 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
         <div className="mb-4">
           <h2 className="font-bold">평가대상 자동배정</h2>
           <p className="mt-1 text-sm text-slate-500">
-            1차 평가자인 리더를 선택하면 <b>그 리더와 같은 부서의 재직자</b>가 자동 조회되고 전체 체크됩니다.
-            선택한 리더 본인은 제외되며, 2차 평가자는 직책관리에서 <b>2차평가 임원</b>으로 지정한 직원만 선택할 수 있습니다.
+            <b>일반 구성원 평가</b>는 리더 선택 → 같은 부서 일반 구성원 자동조회,
+            <b>리더 평가</b>는 본부장 선택 → 해당 본부 산하 부서 리더 자동조회 방식입니다.
+            2차 평가자는 <b>임원</b>만 선택할 수 있습니다.
           </p>
         </div>
 
@@ -295,8 +325,10 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
             action={addEvaluationTargets.bind(null, id)}
             templates={templates}
             leaders={selectorLeaders}
+            divisionHeads={selectorDivisionHeads}
             executives={selectorExecutives}
             employees={selectorEmployees}
+            departments={departments}
           />
         )}
       </Card>
