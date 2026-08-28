@@ -101,7 +101,9 @@ export async function saveFirstEvaluation(assignmentId: string, formData: FormDa
       redirectMessage(`/evaluations/first/${assignmentId}`, 'error', error.message);
     }
 
-    if (!response) {
+    const responseId = response?.id ?? null;
+
+    if (!responseId) {
       redirectMessage(
         `/evaluations/first/${assignmentId}`,
         'error',
@@ -130,7 +132,7 @@ export async function saveFirstEvaluation(assignmentId: string, formData: FormDa
         .from('evaluation_evidence_links')
         .upsert(
           {
-            response_id: response.id,
+            response_id: responseId,
             observation_log_id: observationId,
             linked_by: evaluation?.evaluator_id ?? null,
           },

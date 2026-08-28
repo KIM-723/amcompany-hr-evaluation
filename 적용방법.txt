@@ -1,9 +1,8 @@
-STEP 7~20 Build Hotfix #1
+이번 패치는 response 객체 대신 responseId 문자열을 사용합니다.
 
-1. GitHub 저장소 -> Add file -> Upload files
-2. 압축 안의 app 폴더를 업로드
-3. 기존 app/evaluations/first/actions.ts 갱신
-4. Commit message:
-   fix: first evaluation response null check
+1. GitHub -> app -> evaluations -> first -> actions.ts
+2. 이 패치의 actions.ts로 기존 파일을 교체
+3. Commit message:
+   fix: use non-null response id
+4. Supabase SQL 작업 없음
 5. Vercel 자동배포 확인
-6. 다음 Build Error가 나오면 그 첫 Error만 전달
