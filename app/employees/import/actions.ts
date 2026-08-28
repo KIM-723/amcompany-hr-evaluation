@@ -9,7 +9,9 @@ const rowSchema = z
     employee_no: z.string().min(1),
     name: z.string().min(1),
     email: z.string().nullable(),
-    hire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    hire_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, '입사일 형식 오류: YYYY-MM-DD 형식으로 입력해주세요.'),
     resignation_date: z.string().nullable(),
     employment_type: z.string().min(1),
     employment_status: z.enum(['active', 'leave', 'resigned']),
@@ -102,16 +104,38 @@ function parseDate(value: unknown) {
   const raw = normalize(value);
   if (!raw) return '';
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  if (/^\d{4}[./]\d{1,2}[./]\d{1,2}$/.test(raw)) {
-    const parts = raw.split(/[./]/).map(Number);
-    return `${parts[0]}-${String(parts[1]).padStart(2, '0')}-${String(parts[2]).padStart(2, '0')}`;
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    return `${iso[1]}-${String(Number(iso[2])).padStart(2, '0')}-${String(Number(iso[3])).padStart(2, '0')}`;
   }
 
-  const num = Number(raw);
+  const separated = raw.match(/^(\d{4})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{1,2})(?:\s+.*)?$/);
+  if (separated) {
+    return `${separated[1]}-${String(Number(separated[2])).padStart(2, '0')}-${String(Number(separated[3])).padStart(2, '0')}`;
+  }
+
+  const korean = raw.match(/^(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?(?:\s+.*)?$/);
+  if (korean) {
+    return `${korean[1]}-${String(Number(korean[2])).padStart(2, '0')}-${String(Number(korean[3])).padStart(2, '0')}`;
+  }
+
+  const dateTime = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T]/);
+  if (dateTime) {
+    return `${dateTime[1]}-${String(Number(dateTime[2])).padStart(2, '0')}-${String(Number(dateTime[3])).padStart(2, '0')}`;
+  }
+
+  const num = Number(raw.replace(/,/g, ''));
   if (Number.isFinite(num) && num > 20000 && num < 80000) {
     const utc = Math.round((num - 25569) * 86400 * 1000);
     return new Date(utc).toISOString().slice(0, 10);
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   return raw;
@@ -218,7 +242,19 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
       errors.push({
         row: sourceRow,
         employee_no: converted.employee_no,
-        message: parsed.error.issues[0]?.message ?? '필수값을 확인해주세요.',
+        message: (() => {
+          const issue = parsed.error.issues[0];
+          if (!issue) return '필수값을 확인해주세요.';
+          if (issue.path?.[0] === 'hire_date') {
+            return `입사일 형식 오류 (${converted.hire_date || '빈값'}): YYYY-MM-DD 형식으로 입력해주세요.`;
+          }
+          if (issue.path?.[0] === 'resignation_date') {
+            return issue.message || '퇴사일 형식을 확인해주세요.';
+          }
+          return issue.message === 'Invalid'
+            ? `입력값 오류: ${String(issue.path?.[0] ?? '알 수 없는 항목')}`
+            : issue.message;
+        })(),
       });
       return;
     }
