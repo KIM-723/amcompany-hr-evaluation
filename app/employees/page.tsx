@@ -1,16 +1,23 @@
 import Link from 'next/link';
 import { PageShell } from '@/components/ui/PageShell';
 import { Card } from '@/components/ui/Card';
-import { EmployeeStatusBadge } from '@/components/hr/StatusBadge';
 import { Notice } from '@/components/hr/Notice';
+import { EmployeeBulkDeleteTable, type EmployeeDeleteRow } from '@/components/hr/EmployeeDeleteControls';
 import { requireHrAdmin } from '@/lib/hr/admin';
 import { firstRelationName, stringParam } from '@/lib/hr/utils';
 
 const statusLabel: Record<string,string> = { active: '재직', leave: '휴직', resigned: '퇴사' };
 
 type EmployeeRow = {
-  id: string; employee_no: string; name: string; email: string | null; hire_date: string;
-  employment_status: string; employment_type: string; is_leader: boolean;
+  id: string;
+  employee_no: string;
+  name: string;
+  email: string | null;
+  hire_date: string;
+  resignation_date: string | null;
+  employment_status: string;
+  employment_type: string;
+  is_leader: boolean;
   departments: { name: string } | { name: string }[] | null;
   job_levels: { name: string } | { name: string }[] | null;
   positions: { name: string } | { name: string }[] | null;
@@ -28,7 +35,11 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Se
   const errorMessage = stringParam(params.error);
   const { supabase } = await requireHrAdmin();
 
-  let query = supabase.from('employees').select('id,employee_no,name,email,hire_date,employment_status,employment_type,is_leader,departments(name),job_levels(name),positions(name)').order('employee_no');
+  let query = supabase
+    .from('employees')
+    .select('id,employee_no,name,email,hire_date,resignation_date,employment_status,employment_type,is_leader,departments(name),job_levels(name),positions(name)')
+    .order('employee_no');
+
   if (q) query = query.or(`employee_no.ilike.%${q}%,name.ilike.%${q}%,email.ilike.%${q}%`);
   if (departmentId) query = query.eq('department_id', departmentId);
   if (jobLevelId) query = query.eq('job_level_id', jobLevelId);
@@ -39,19 +50,46 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Se
     supabase.from('departments').select('id,name').order('sort_order').order('name'),
     supabase.from('job_levels').select('id,name').order('level_order'),
   ]);
+
   const employees = (employeesData ?? []) as unknown as EmployeeRow[];
   const departmentOptions = (departments ?? []) as { id: string; name: string }[];
   const jobLevelOptions = (jobLevels ?? []) as { id: string; name: string }[];
 
+  const deleteRows: EmployeeDeleteRow[] = employees.map((e) => ({
+    id: e.id,
+    employee_no: e.employee_no,
+    name: e.name,
+    department_name: firstRelationName(e.departments) ?? '',
+    job_level_name: firstRelationName(e.job_levels) ?? '',
+    position_name: firstRelationName(e.positions) ?? '',
+    hire_date: e.hire_date,
+    resignation_date: e.resignation_date,
+    employment_status: e.employment_status,
+    is_leader: e.is_leader,
+  }));
+
   return (
-    <PageShell title="직원관리" description="직원 기본정보와 조직·직급·직책·재직상태를 실제 DB에서 관리합니다.">
+    <PageShell
+      title="직원관리"
+      description="직원 기본정보·퇴사일·재직상태를 관리하고, 선택 직원을 일괄 영구삭제할 수 있습니다."
+    >
       <Notice success={success} error={errorMessage || error?.message} />
+
       <Card>
         <form className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr_auto_auto]" method="get">
           <input name="q" defaultValue={q} placeholder="사번·이름·이메일 검색" className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-          <select name="department" defaultValue={departmentId} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"><option value="">전체 부서</option>{departmentOptions.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
-          <select name="job_level" defaultValue={jobLevelId} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"><option value="">전체 직급</option>{jobLevelOptions.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
-          <select name="status" defaultValue={status} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"><option value="">전체 상태</option>{Object.entries(statusLabel).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>
+          <select name="department" defaultValue={departmentId} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+            <option value="">전체 부서</option>
+            {departmentOptions.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+          <select name="job_level" defaultValue={jobLevelId} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+            <option value="">전체 직급</option>
+            {jobLevelOptions.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+          <select name="status" defaultValue={status} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+            <option value="">전체 상태</option>
+            {Object.entries(statusLabel).map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          </select>
           <button className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold">검색</button>
           <div className="flex gap-2">
             <Link href="/employees/import" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-center text-sm font-semibold text-emerald-800">Excel 일괄등록</Link>
@@ -59,15 +97,14 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Se
           </div>
         </form>
       </Card>
-      <div className="flex items-center justify-between text-sm text-slate-500"><span>총 {employees.length}명</span><span>행을 클릭하면 상세정보를 수정할 수 있습니다.</span></div>
-      <Card className="overflow-x-auto p-0">
-        <table className="w-full min-w-[960px] text-left text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500"><tr>{['사번','이름','부서','직급','직책','입사일','리더','상태',''].map((h)=><th key={h} className="px-4 py-3 font-semibold">{h}</th>)}</tr></thead>
-          <tbody>{employees.map((e)=><tr key={e.id} className="border-t border-slate-100 hover:bg-slate-50/70">
-            <td className="px-4 py-3 font-medium">{e.employee_no}</td><td className="px-4 py-3">{e.name}</td><td className="px-4 py-3">{firstRelationName(e.departments) ?? '-'}</td><td className="px-4 py-3">{firstRelationName(e.job_levels) ?? '-'}</td><td className="px-4 py-3">{firstRelationName(e.positions) ?? '-'}</td><td className="px-4 py-3">{e.hire_date}</td><td className="px-4 py-3">{e.is_leader ? 'Y' : '-'}</td><td className="px-4 py-3"><EmployeeStatusBadge status={e.employment_status}/></td><td className="px-4 py-3 text-right"><Link href={`/employees/${e.id}`} className="font-semibold text-blue-700">상세/수정</Link></td>
-          </tr>)}</tbody>
-        </table>
-        {employees.length === 0 && <div className="py-14 text-center text-sm text-slate-500">조건에 맞는 직원이 없습니다.</div>}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+        <span>총 {employees.length}명</span>
+        <span className="text-red-500">영구삭제는 관련 진단·평가 데이터까지 삭제되며 복구할 수 없습니다.</span>
+      </div>
+
+      <Card className="overflow-hidden p-0">
+        <EmployeeBulkDeleteTable rows={deleteRows} />
       </Card>
     </PageShell>
   );

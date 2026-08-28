@@ -9,6 +9,7 @@ type PreviewRow = {
   name: string;
   email: string;
   hire_date: string;
+  resignation_date: string;
   employment_type: string;
   employment_status: string;
   department: string;
@@ -25,6 +26,7 @@ const HEADER_MAP: Record<string, keyof PreviewRow> = {
   '이름': 'name',
   '이메일': 'email',
   '입사일': 'hire_date',
+  '퇴사일': 'resignation_date',
   '고용형태': 'employment_type',
   '재직상태': 'employment_status',
   '부서': 'department',
@@ -40,9 +42,9 @@ const REQUIRED_HEADERS = ['사번','이름','입사일','고용형태','재직�
 
 function blankRow(): PreviewRow {
   return {
-    employee_no: '', name: '', email: '', hire_date: '', employment_type: '',
-    employment_status: '', department: '', job_level: '', position: '',
-    leader_employee_no: '', is_leader: '', phone: '', notes: '',
+    employee_no:'', name:'', email:'', hire_date:'', resignation_date:'',
+    employment_type:'', employment_status:'', department:'', job_level:'',
+    position:'', leader_employee_no:'', is_leader:'', phone:'', notes:'',
   };
 }
 
@@ -57,7 +59,6 @@ export function EmployeeExcelImport() {
   const [clientErrors, setClientErrors] = useState<string[]>([]);
   const [result, setResult] = useState<BulkImportResult | null>(null);
   const [isPending, startTransition] = useTransition();
-
   const preview = useMemo(() => rows.slice(0, 20), [rows]);
 
   async function handleFile(file: File | undefined) {
@@ -87,6 +88,7 @@ export function EmployeeExcelImport() {
 
       const headers = (matrix[0] ?? []).map(normalizeCell);
       const missing = REQUIRED_HEADERS.filter((header) => !headers.includes(header));
+
       if (missing.length) {
         setClientErrors([`필수 열이 없습니다: ${missing.join(', ')}`]);
         return;
@@ -105,6 +107,7 @@ export function EmployeeExcelImport() {
         });
 
       const errors: string[] = [];
+
       converted.forEach((row, index) => {
         const excelRow = index + 2;
         if (!row.employee_no) errors.push(`${excelRow}행: 사번 필수`);
@@ -112,6 +115,9 @@ export function EmployeeExcelImport() {
         if (!row.hire_date) errors.push(`${excelRow}행: 입사일 필수`);
         if (!row.employment_type) errors.push(`${excelRow}행: 고용형태 필수`);
         if (!row.employment_status) errors.push(`${excelRow}행: 재직상태 필수`);
+        if (['퇴사','퇴직','resigned','퇴사자'].includes(row.employment_status.toLowerCase()) && !row.resignation_date) {
+          errors.push(`${excelRow}행: 퇴사자는 퇴사일 필수`);
+        }
       });
 
       setRows(converted);
@@ -133,29 +139,17 @@ export function EmployeeExcelImport() {
     <div className="space-y-5">
       <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
         <div className="font-bold">사용방법</div>
-        <div className="mt-1">
-          ① 양식 다운로드 → ② 직원정보 입력 → ③ Excel 업로드 → ④ 미리보기 확인 → ⑤ 일괄등록
-        </div>
+        <div className="mt-1">① 양식 다운로드 → ② 직원정보 입력 → ③ Excel 업로드 → ④ 미리보기 → ⑤ 일괄등록</div>
         <div className="mt-2 text-xs text-blue-700">
-          기존에 등록된 사번은 자동으로 건너뜁니다. 부서·직급·직책은 조직관리에 등록된 이름과 동일하게 입력해주세요.
+          퇴사자를 등록할 경우 재직상태를 '퇴사'로 입력하고 퇴사일을 반드시 입력해주세요.
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <a
-          href="/api/templates/employees"
-          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold"
-        >
-          Excel 양식 다운로드
-        </a>
+        <a href="/api/templates/employees" className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold">Excel 양식 다운로드</a>
         <label className="cursor-pointer rounded-xl bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white">
           Excel 파일 선택
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={(event) => handleFile(event.target.files?.[0])}
-          />
+          <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => handleFile(event.target.files?.[0])} />
         </label>
         {fileName && <span className="self-center text-sm text-slate-500">{fileName}</span>}
       </div>
@@ -173,14 +167,14 @@ export function EmployeeExcelImport() {
         <>
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">업로드 데이터 {rows.length}명</div>
-            <div className="text-xs text-slate-500">미리보기는 최대 20명까지 표시합니다.</div>
+            <div className="text-xs text-slate-500">미리보기 최대 20명</div>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="min-w-[1300px] w-full text-left text-xs">
+            <table className="min-w-[1450px] w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
-                  {['사번','이름','이메일','입사일','고용형태','상태','부서','직급','직책','리더사번','리더','전화번호','비고'].map((h) => (
+                  {['사번','이름','이메일','입사일','퇴사일','고용형태','상태','부서','직급','직책','리더사번','리더','전화번호','비고'].map((h) => (
                     <th key={h} className="px-3 py-3 font-semibold">{h}</th>
                   ))}
                 </tr>
@@ -192,6 +186,7 @@ export function EmployeeExcelImport() {
                     <td className="px-3 py-2">{row.name}</td>
                     <td className="px-3 py-2">{row.email}</td>
                     <td className="px-3 py-2">{row.hire_date}</td>
+                    <td className="px-3 py-2">{row.resignation_date}</td>
                     <td className="px-3 py-2">{row.employment_type}</td>
                     <td className="px-3 py-2">{row.employment_status}</td>
                     <td className="px-3 py-2">{row.department}</td>
@@ -212,7 +207,7 @@ export function EmployeeExcelImport() {
               type="button"
               onClick={submitImport}
               disabled={isPending || clientErrors.length > 0}
-              className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
             >
               {isPending ? '등록 중...' : `${rows.length}명 일괄등록`}
             </button>
@@ -223,20 +218,13 @@ export function EmployeeExcelImport() {
       {result && (
         <div className={`rounded-2xl border p-4 ${result.ok ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
           <div className={`font-bold ${result.ok ? 'text-emerald-800' : 'text-red-700'}`}>{result.message}</div>
-          <div className="mt-2 text-sm">
-            신규등록 {result.inserted}명 · 기존 사번 건너뜀 {result.skipped}명 · 오류 {result.errors.length}건
-          </div>
+          <div className="mt-2 text-sm">신규등록 {result.inserted}명 · 기존 사번 건너뜀 {result.skipped}명 · 오류 {result.errors.length}건</div>
           {result.errors.length > 0 && (
             <div className="mt-3 max-h-60 overflow-y-auto text-sm text-red-700">
               {result.errors.map((error, index) => (
                 <div key={index}>{error.row ? `${error.row}행` : ''} {error.employee_no ? `(${error.employee_no})` : ''}: {error.message}</div>
               ))}
             </div>
-          )}
-          {result.ok && (
-            <a href="/employees" className="mt-4 inline-block rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-800">
-              직원목록 확인
-            </a>
           )}
         </div>
       )}

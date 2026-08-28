@@ -1,13 +1,43 @@
-직원 Excel 일괄등록 패치
+직원 삭제 / 일괄삭제 / 퇴사일 / 퇴사자 평가표시 패치
 
-1. ZIP 압축 해제
-2. GitHub -> Add file -> Upload files
-3. app / components / docs 폴더 전체 업로드
-4. Commit:
-   feat: employee excel bulk import
-5. Supabase SQL 실행 없음
-6. Vercel 자동배포 Ready 확인
-7. 직원관리 -> Excel 일괄등록 클릭
-8. Excel 양식 다운로드 -> 작성 -> 업로드 -> 일괄등록
+[1] GitHub
+ZIP 압축 해제
+GitHub -> Add file -> Upload files
+아래 폴더 전체 업로드
+- app
+- components
+- supabase
+Commit:
+feat: employee deletion and resignation handling
 
-새 환경변수 없음.
+[2] Supabase SQL Editor
+순서대로 실행
+1. supabase/migrations/016_employee_delete_resignation.sql
+2. 성공 후 supabase/migrations/017_employee_delete_resignation_validation.sql
+
+017에서 아래가 true인지 확인
+- single_delete_function
+- bulk_delete_function
+- resignation_sync_function
+- single_delete_execute
+- bulk_delete_execute
+
+표 목록의 has_resigned_flag / has_resignation_date가 모두 1이면 정상.
+
+[3] Vercel
+GitHub Commit 후 자동배포 -> Ready
+
+[4] 테스트
+1. 테스트 직원 하나 생성
+2. 상세에서 퇴사일 입력 + 퇴사 처리
+3. 1차평가/2차/결과 화면에서 '퇴사자 · 날짜' 표시 확인
+4. 다시 재직으로 변경 -> 퇴사자 표시 해제 확인
+5. 테스트 직원에 평가데이터를 만든 뒤 직원 영구삭제
+6. 직원목록에서 체크박스 2명 선택 -> 일괄삭제 확인
+
+주의
+영구삭제는 복구 불가.
+해당 직원 본인의 모든 진단/평가/관찰/성장 데이터와
+해당 직원이 평가자로 작성한 평가도 함께 삭제됨.
+다른 직원 평가배정에서 그 직원의 1차/2차 평가자 지정은 해제됨.
+로그인 연결 profile은 비활성 처리되지만 auth.users 계정 자체는 삭제하지 않음.

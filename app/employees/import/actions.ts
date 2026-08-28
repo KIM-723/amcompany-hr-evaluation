@@ -4,21 +4,31 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireHrAdmin } from '@/lib/hr/admin';
 
-const rowSchema = z.object({
-  employee_no: z.string().min(1),
-  name: z.string().min(1),
-  email: z.string().nullable(),
-  hire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  employment_type: z.string().min(1),
-  employment_status: z.enum(['active', 'leave', 'resigned']),
-  department: z.string().nullable(),
-  job_level: z.string().nullable(),
-  position: z.string().nullable(),
-  leader_employee_no: z.string().nullable(),
-  is_leader: z.boolean(),
-  phone: z.string().nullable(),
-  notes: z.string().nullable(),
-});
+const rowSchema = z
+  .object({
+    employee_no: z.string().min(1),
+    name: z.string().min(1),
+    email: z.string().nullable(),
+    hire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    resignation_date: z.string().nullable(),
+    employment_type: z.string().min(1),
+    employment_status: z.enum(['active', 'leave', 'resigned']),
+    department: z.string().nullable(),
+    job_level: z.string().nullable(),
+    position: z.string().nullable(),
+    leader_employee_no: z.string().nullable(),
+    is_leader: z.boolean(),
+    phone: z.string().nullable(),
+    notes: z.string().nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.employment_status === 'resigned' && !value.resignation_date) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['resignation_date'], message: '퇴사자는 퇴사일이 필수입니다.' });
+    }
+    if (value.resignation_date && value.resignation_date < value.hire_date) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['resignation_date'], message: '퇴사일은 입사일보다 빠를 수 없습니다.' });
+    }
+  });
 
 export type BulkImportResult = {
   ok: boolean;
@@ -67,7 +77,6 @@ function parseDate(value: unknown) {
     return `${parts[0]}-${String(parts[1]).padStart(2, '0')}-${String(parts[2]).padStart(2, '0')}`;
   }
 
-  // Excel serial date, sent from client as a numeric-looking string
   const num = Number(raw);
   if (Number.isFinite(num) && num > 20000 && num < 80000) {
     const utc = Math.round((num - 25569) * 86400 * 1000);
@@ -86,6 +95,7 @@ function readRawRow(raw: Record<string, unknown>): ImportRow | null {
     name: normalize(raw.name),
     email: optional(raw.email),
     hire_date: parseDate(raw.hire_date),
+    resignation_date: status === 'resigned' ? optional(parseDate(raw.resignation_date)) : null,
     employment_type: normalize(raw.employment_type),
     employment_status: status,
     department: optional(raw.department),
@@ -108,9 +118,7 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
     rawRows = parsed;
   } catch {
     return {
-      ok: false,
-      inserted: 0,
-      skipped: 0,
+      ok: false, inserted: 0, skipped: 0,
       errors: [{ row: 0, message: '업로드 데이터 형식을 읽을 수 없습니다.' }],
       message: '엑셀 데이터를 다시 업로드해주세요.',
     };
@@ -119,11 +127,10 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
   if (rawRows.length === 0) {
     return { ok: false, inserted: 0, skipped: 0, errors: [], message: '등록할 행이 없습니다.' };
   }
+
   if (rawRows.length > 1000) {
     return {
-      ok: false,
-      inserted: 0,
-      skipped: 0,
+      ok: false, inserted: 0, skipped: 0,
       errors: [{ row: 0, message: '한 번에 최대 1,000명까지 등록할 수 있습니다.' }],
       message: '엑셀을 나누어 업로드해주세요.',
     };
@@ -144,9 +151,7 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
   const initialError = departmentError || jobLevelError || positionError || employeeError;
   if (initialError) {
     return {
-      ok: false,
-      inserted: 0,
-      skipped: 0,
+      ok: false, inserted: 0, skipped: 0,
       errors: [{ row: 0, message: initialError.message }],
       message: '기준정보를 불러오지 못했습니다.',
     };
@@ -159,16 +164,11 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
   const duplicateInFile = new Set<string>();
 
   const errors: BulkImportResult['errors'] = [];
-  const validRows: Array<{
-    sourceRow: number;
-    row: ImportRow;
-    payload: Record<string, unknown>;
-  }> = [];
-
+  const validRows: Array<{ sourceRow: number; row: ImportRow; payload: Record<string, unknown> }> = [];
   let skipped = 0;
 
   rawRows.forEach((raw, index) => {
-    const sourceRow = index + 2; // Excel header is row 1
+    const sourceRow = index + 2;
     const converted = readRawRow(raw);
 
     if (!converted) {
@@ -222,11 +222,7 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
       return;
     }
     if (row.leader_employee_no && !leader) {
-      errors.push({
-        row: sourceRow,
-        employee_no: row.employee_no,
-        message: `리더 사번을 찾을 수 없습니다: ${row.leader_employee_no}`,
-      });
+      errors.push({ row: sourceRow, employee_no: row.employee_no, message: `리더 사번을 찾을 수 없습니다: ${row.leader_employee_no}` });
       return;
     }
 
@@ -238,7 +234,7 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
         name: row.name,
         email: row.email,
         hire_date: row.hire_date,
-        resignation_date: row.employment_status === 'resigned' ? row.hire_date : null,
+        resignation_date: row.resignation_date,
         employment_status: row.employment_status,
         employment_type: row.employment_type,
         department_id: departmentId,
@@ -252,28 +248,22 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
     });
   });
 
-  // Validation errors block the whole import so the user can fix the file first.
   if (errors.length > 0) {
     return {
-      ok: false,
-      inserted: 0,
-      skipped,
-      errors,
+      ok: false, inserted: 0, skipped, errors,
       message: `오류 ${errors.length}건이 있어 등록하지 않았습니다. 엑셀을 수정한 뒤 다시 업로드해주세요.`,
     };
   }
 
   let inserted = 0;
 
-  // Chunk insert for stable server requests.
   for (let i = 0; i < validRows.length; i += 200) {
     const chunk = validRows.slice(i, i + 200);
     const { error } = await supabase.from('employees').insert(chunk.map((x) => x.payload));
+
     if (error) {
       return {
-        ok: false,
-        inserted,
-        skipped,
+        ok: false, inserted, skipped,
         errors: [{ row: chunk[0]?.sourceRow ?? 0, message: error.message }],
         message: `일괄등록 도중 오류가 발생했습니다. ${inserted}명까지 등록되었습니다.`,
       };
@@ -285,10 +275,7 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
   revalidatePath('/organization');
 
   return {
-    ok: true,
-    inserted,
-    skipped,
-    errors: [],
+    ok: true, inserted, skipped, errors: [],
     message: `신규 ${inserted}명 등록 완료${skipped ? ` · 기존 사번 ${skipped}명 건너뜀` : ''}`,
   };
 }
