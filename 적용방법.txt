@@ -1,60 +1,43 @@
-산하조직 부서장·리더 전체조회 + 부서장평가 2차 선택사항 패치
+부서장 평가 조회 0명 Fallback Hotfix
 
-변경내용
+현재 문제:
+본부장 직원의 소속부서(예: 임원)에 departments.parent_id로 연결된
+산하조직이 없으면 기존 로직은 조회 결과가 0명이 됨.
 
-1. 부서장 평가에서 본부장을 선택하면:
-   - 본부장 소속 조직의 직접 하위부서만 보는 것이 아니라
-   - 모든 하위단계 조직을 재귀적으로 조회
-   - 그 조직에 속한 사람 중
-     * 직책관리 evaluation_role = 부서장
-     * 실제 직책명에 '부서장' 포함
-     * 실제 직책명에 '리더' 포함
-     인 사람을 모두 평가대상에 표시
+변경:
+1. 본부장 소속조직에 산하조직 연결이 있으면
+   -> 해당 산하 전체 조직의 부서장/리더만 조회
 
-2. 부서장 평가의 2차 평가자:
-   - 필수 아님
-   - '선택 안 함' 가능
-   - DB에는 second_evaluator_id = NULL 저장
+2. 산하조직 연결이 하나도 없으면
+   -> 전체 재직 부서장/리더를 자동 조회
+   -> 전원 자동체크
+   -> 필요한 사람만 체크 해제 가능
 
-3. 일반 구성원 평가:
-   - 기존 유지
-   - 1차 = 같은 부서 부서장
-   - 2차 = 본부장 필수
+3. DB 등록 검증도 같은 fallback 규칙 적용
 
-4. 기존 직원 신규/삭제 실시간 갱신 기능 유지
+4. 부서장평가 2차 평가자 선택사항 기능 유지
 
 적용 순서
 
 [1] GitHub 먼저
 ZIP 압축 해제
-GitHub -> Add file -> Upload files
-
-업로드:
-- app
-- components
-- supabase
+app / components / supabase 업로드
 
 Commit:
-fix: show all suborg heads and make second review optional
+fix: fallback to all department heads when org hierarchy missing
 
-[2] Supabase SQL Editor
-028_suborg_department_heads_optional_second.sql
+[2] Supabase SQL
+030_head_evaluation_suborg_fallback.sql
 성공 후
-029_suborg_department_heads_validation.sql
+031_head_evaluation_suborg_fallback_validation.sql
 
-029에서:
-- evaluator_validation_function = true
+031 첫 결과:
+- has_descendant_function = true
 - descendant_department_function = true
+- evaluator_validation_function = true
 
-[3] Vercel Ready 확인
+[3] Vercel Ready 후 다시 테스트
 
-[4] 테스트
-평가기간 -> 부서장 평가
--> 본부장 선택
--> 산하 전체 조직의 부서장/리더 출력 확인
--> 2차 평가자 '선택 안 함'
--> 평가대상 등록
-
-중요:
-조직관리에서 하위부서의 parent_id가 본부/상위조직에 연결되어 있어야
-'산하조직'으로 조회됩니다.
+본부장 선택 후 조직 상위관계가 없으면 화면에:
+'전체 재직 부서장/리더 · N명'
+으로 표시됨.

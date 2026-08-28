@@ -549,6 +549,8 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       frontier = next;
     }
 
+    const hasConfiguredSubOrganizations = descendantIds.size > 0;
+
     const invalidTarget = (targets ?? []).find((employee) => {
       const position = Array.isArray(employee.positions)
         ? employee.positions[0]
@@ -563,8 +565,11 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
       return (
         employee.id === firstEvaluatorId ||
         !employee.department_id ||
-        !descendantIds.has(employee.department_id) ||
-        !isDepartmentHeadOrLegacyLeader
+        !isDepartmentHeadOrLegacyLeader ||
+        (
+          hasConfiguredSubOrganizations &&
+          !descendantIds.has(employee.department_id)
+        )
       );
     });
 
@@ -573,7 +578,9 @@ export async function addEvaluationTargets(periodId: string, formData: FormData)
         messageUrl(
           `/periods/${periodId}`,
           'error',
-          '부서장 평가는 선택한 본부장 산하 전체 조직의 부서장·리더만 등록할 수 있습니다.',
+          hasConfiguredSubOrganizations
+            ? '부서장 평가는 선택한 본부장 산하 전체 조직의 부서장·리더만 등록할 수 있습니다.'
+            : '조직 상위관계가 없는 경우 재직 중인 부서장·리더만 평가대상으로 등록할 수 있습니다.',
         ),
       );
     }
@@ -822,7 +829,12 @@ export async function updateAssignment(
       frontier = next;
     }
 
-    if (!descendantIds.has(target.department_id)) {
+    const hasConfiguredSubOrganizations = descendantIds.size > 0;
+
+    if (
+      hasConfiguredSubOrganizations &&
+      !descendantIds.has(target.department_id)
+    ) {
       redirect(
         messageUrl(
           `/periods/${periodId}`,

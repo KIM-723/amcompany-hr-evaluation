@@ -110,16 +110,19 @@ export function EvaluatorTargetSelector({
     }
 
     // 부서장 평가:
-    // 선택한 본부장의 모든 산하 조직에서
-    // 1) 평가역할이 부서장(leader)이거나
-    // 2) 실제 직책명이 "부서장" 또는 기존 "리더"
-    // 인 사람을 모두 표시한다.
+    // 1) 본부장 소속 조직의 하위조직 관계가 있으면 산하조직의 부서장·리더만 조회
+    // 2) 조직 상위관계(parent_id)가 아직 구성되지 않았다면 전체 재직 부서장·리더를 fallback 조회
+    const hasConfiguredSubOrganizations = descendantDepartmentIds.size > 0;
+
     return employees.filter(
       (employee) =>
         employee.department_id !== null &&
-        descendantDepartmentIds.has(employee.department_id) &&
         employee.id !== selectedEvaluator.id &&
-        isDepartmentHeadTarget(employee),
+        isDepartmentHeadTarget(employee) &&
+        (
+          !hasConfiguredSubOrganizations ||
+          descendantDepartmentIds.has(employee.department_id)
+        ),
     );
   }, [employees, mode, selectedEvaluator, descendantDepartmentIds]);
 
@@ -190,13 +193,18 @@ export function EvaluatorTargetSelector({
       frontier = next;
     }
 
+    const hasConfiguredSubOrganizations = descendantIds.size > 0;
+
     const departmentHeadIds = employees
       .filter(
         (employee) =>
           employee.department_id !== null &&
-          descendantIds.has(employee.department_id) &&
           employee.id !== evaluator.id &&
-          isDepartmentHeadTarget(employee),
+          isDepartmentHeadTarget(employee) &&
+          (
+            !hasConfiguredSubOrganizations ||
+            descendantIds.has(employee.department_id)
+          ),
       )
       .map((employee) => employee.id);
 
@@ -359,7 +367,7 @@ export function EvaluatorTargetSelector({
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
           {mode === 'member'
             ? `${selectedEvaluator.department_name}에 추가 가능한 일반 구성원이 없습니다.`
-            : `${selectedEvaluator.department_name} 산하 조직에서 추가 가능한 부서장·리더가 없습니다. 조직관리의 상위조직 연결과 직원 직책을 확인해주세요.`}
+            : `${selectedEvaluator.department_name} 기준으로 추가 가능한 부서장·리더가 없습니다. 직원 직책을 확인해주세요.`}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -368,10 +376,14 @@ export function EvaluatorTargetSelector({
               <div className="font-bold">
                 {mode === 'member'
                   ? `${selectedEvaluator.department_name} · 일반 구성원 ${targets.length}명`
-                  : `${selectedEvaluator.department_name} 산하 전체 조직 · 부서장/리더 ${targets.length}명`}
+                  : descendantDepartmentIds.size > 0
+                    ? `${selectedEvaluator.department_name} 산하 전체 조직 · 부서장/리더 ${targets.length}명`
+                    : `전체 재직 부서장/리더 · ${targets.length}명`}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                현재 직원목록을 기준으로 하위조직 전체를 조회합니다. 전원 자동체크되며 일부 해제할 수 있습니다.
+                {mode === 'leader' && descendantDepartmentIds.size === 0
+                  ? '조직 상위관계가 연결되지 않아 전체 재직 부서장·리더를 표시합니다. 전원 자동체크되며 일부 해제할 수 있습니다.'
+                  : '현재 직원목록을 기준으로 하위조직 전체를 조회합니다. 전원 자동체크되며 일부 해제할 수 있습니다.'}
               </div>
             </div>
 
