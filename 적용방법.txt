@@ -1,18 +1,6 @@
-STEP 5 직원관리 permission denied 패치
-
-1. ZIP 압축을 풉니다.
-2. GitHub 저장소 -> Add file -> Upload files.
-3. 압축 안의 lib, supabase, docs 폴더를 업로드합니다.
-4. Commit message:
-   fix: STEP 5 service role table permissions
-5. Supabase SQL Editor에서
-   supabase/migrations/007_step5_service_role_grants.sql
-   전체를 실행합니다.
-6. 성공하면
-   supabase/migrations/008_step5_permission_validation.sql
-   을 실행합니다.
-7. 두 번째 결과에서 employees_select / employees_insert /
-   employees_update / departments_select / job_levels_select /
-   positions_select 값이 모두 true인지 확인합니다.
-8. Vercel 새 배포가 Ready가 되면 /employees를 새로고침합니다.
-9. 직원 목록이 나오면 검색도 같이 정상 작동합니다.
+1. Supabase SQL Editor에서 015_step20_is_hr_admin_hotfix.sql 전체 실행
+2. 결과가
+   is_hr_admin_exists = true
+   service_role_execute = true
+   인지 확인
+3. 그 다음 기존 014_step7_20_validation.sql을 처음부터 다시 실행
