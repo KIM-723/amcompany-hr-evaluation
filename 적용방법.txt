@@ -1,23 +1,31 @@
-Excel 업로드 후 진단결과에 안 보이는 문제 Hotfix
+인사진단 employees 관계 모호성 Hotfix
+
+오류:
+Could not embed because more than one relationship was found for
+'personnel_diagnoses' and 'employees'
 
 원인:
-기존 /diagnoses/results 화면이 status = completed 인 진단만 조회하고 있었음.
-Excel 업로드 직후 진단 상태는 imported 이므로 결과 화면에서 숨겨졌음.
+personnel_diagnoses 테이블이 employees를 여러 FK로 참조함:
+- employee_id
+- department_head_id
+- headquarters_head_id
+- source_uploaded_by
+- created_by
+- updated_by
 
-변경:
-- Excel 업로드 즉시 진단결과 화면에 표시
-- imported / 작성중 / 완료 전체 표시
-- 현재 진행상태 Badge 표시
-- Excel 파일명 / 업로드 시각 표시
-- 완료 전: '진단 작성/확인'
-- 완료 후: '진단 결과 보기'
-- 전체 / 진행중 / 완료 건수 표시
+그래서 Supabase/PostgREST가 단순 employees(...) 관계를 자동 선택할 수 없음.
+
+수정:
+평가대상 직원 관계를 아래 FK로 명시:
+employees!personnel_diagnoses_employee_id_fkey
 
 적용:
-1. GitHub -> app -> diagnoses -> results -> page.tsx
-2. 기존 page.tsx를 이 파일로 교체
-3. Commit:
-   fix: show uploaded diagnoses before completion
-4. Supabase SQL 작업 없음
-5. Vercel Ready
-6. 인사진단 -> 진단 결과 다시 확인
+1. GitHub에 아래 3개 파일 교체
+   - app/diagnoses/page.tsx
+   - app/diagnoses/[id]/page.tsx
+   - app/diagnoses/results/page.tsx
+2. Commit:
+   fix: specify diagnosis subject employee relationship
+3. Supabase SQL 작업 없음
+4. Vercel Ready
+5. 인사진단 -> 진단 결과 다시 확인

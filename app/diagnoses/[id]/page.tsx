@@ -101,7 +101,7 @@ export default async function DiagnosisDetailPage({
   const { data: diagnosis, error } = await supabase
     .from('personnel_diagnoses')
     .select(
-      '*,employees(name,employee_no,departments(name),job_levels(name),positions(name)),evaluation_periods(name),department_head:employees!personnel_diagnoses_department_head_id_fkey(name,employee_no),headquarters_head:employees!personnel_diagnoses_headquarters_head_id_fkey(name,employee_no)',
+      '*,employees:employees!personnel_diagnoses_employee_id_fkey(name,employee_no,departments(name),job_levels(name),positions(name)),evaluation_periods(name),department_head:employees!personnel_diagnoses_department_head_id_fkey(name,employee_no),headquarters_head:employees!personnel_diagnoses_headquarters_head_id_fkey(name,employee_no)',
     )
     .eq('id', id)
     .single();

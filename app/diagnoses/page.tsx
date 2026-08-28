@@ -35,7 +35,7 @@ export default async function DiagnosesPage({
   const { data: rows } = await supabase
     .from('personnel_diagnoses')
     .select(
-      'id,period_id,employee_id,department_head_id,headquarters_head_id,subject_is_department_head,status,source_file_name,source_uploaded_at,updated_at,employees(name,employee_no,departments(name),positions(name)),evaluation_periods(name)',
+      'id,period_id,employee_id,department_head_id,headquarters_head_id,subject_is_department_head,status,source_file_name,source_uploaded_at,updated_at,employees:employees!personnel_diagnoses_employee_id_fkey(name,employee_no,departments(name),positions(name)),evaluation_periods(name)',
     )
     .order('updated_at', { ascending: false });
 
