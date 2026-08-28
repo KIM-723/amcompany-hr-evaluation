@@ -78,3 +78,43 @@ export interface EmployeeMasterRecord {
   is_leader: boolean;
   notes: string | null;
 }
+export interface EvaluationPeriodRecord {
+  id: UUID;
+  name: string;
+  code: string | null;
+  description: string | null;
+  start_date: ISODate;
+  end_date: ISODate;
+  self_start_date: ISODate | null;
+  self_end_date: ISODate | null;
+  first_start_date: ISODate | null;
+  first_end_date: ISODate | null;
+  second_start_date: ISODate | null;
+  second_end_date: ISODate | null;
+  calibration_start_date: ISODate | null;
+  calibration_end_date: ISODate | null;
+  result_release_date: ISODate | null;
+  status: EvaluationPeriodStatus;
+  copied_from_id: UUID | null;
+  activated_at: ISODateTime | null;
+  closed_at: ISODateTime | null;
+  settings: Record<string, unknown>;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+}
+
+export interface EvaluationAssignmentMasterRecord {
+  id: UUID;
+  period_id: UUID;
+  employee_id: UUID;
+  first_evaluator_id: UUID | null;
+  second_evaluator_id: UUID | null;
+  template_id: UUID;
+  status: string;
+  current_stage: string;
+  snapshot_version: number;
+  snapshot_created_at: ISODateTime | null;
+  started_at: ISODateTime | null;
+  assigned_at: ISODateTime;
+  updated_at: ISODateTime;
+}

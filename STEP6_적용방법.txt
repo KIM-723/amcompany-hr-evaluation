@@ -1,0 +1,53 @@
+AMCOMPANY 인사진단 STEP 6 적용방법
+
+[1] GitHub
+- 이 ZIP 압축 해제
+- GitHub 저장소 -> Add file -> Upload files
+- 아래 항목 전체 업로드
+  app
+  components
+  docs
+  supabase
+  types
+- Commit message:
+  STEP 6 - evaluation period management
+
+[2] Supabase SQL
+SQL Editor -> New query에서 순서대로 실행
+
+1) supabase/migrations/009_step6_evaluation_period_management.sql
+2) 성공 확인 후 supabase/migrations/010_step6_validation.sql
+
+010 결과의 아래 항목이 모두 true인지 확인
+- periods_select
+- periods_insert
+- periods_update
+- assignments_select
+- assignments_insert
+- snapshots_select
+- templates_select
+- snapshot_execute
+- activate_execute
+- close_execute
+
+[3] Vercel
+- GitHub Commit 후 자동배포
+- 최신 Deployment가 Ready인지 확인
+
+[4] 기능 테스트
+/periods
+/periods/new
+
+권장 테스트 순서
+1. 평가기간 생성
+2. 평가대상 2~3명 지정
+3. Template 선택
+4. 1차/2차 평가자 지정
+5. 평가 시작
+6. Snapshot 건수 확인
+7. Calibration 전환
+8. 평가 종료
+
+주의
+현재 FORCE_DEMO_LOGIN=true를 사용 중이면
+Vercel에 SUPABASE_SECRET_KEY 또는 SUPABASE_SERVICE_ROLE_KEY가 반드시 있어야 합니다.
