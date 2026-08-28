@@ -73,12 +73,18 @@ export async function createQuestion(formData: FormData) {
 
   if (error) redirectMessage('/questions', 'error', error.message);
 
+  const questionId = question?.id ?? null;
+
+  if (!questionId) {
+    redirectMessage('/questions', 'error', '생성된 평가문항 ID를 확인할 수 없습니다.');
+  }
+
   const coreValueIds = formData.getAll('core_value_ids').map(String).filter(Boolean);
   if (coreValueIds.length) {
     const { error: mappingError } = await supabase
       .from('evaluation_question_core_values')
       .insert(coreValueIds.map((coreValueId) => ({
-        question_id: question.id,
+        question_id: questionId,
         core_value_id: coreValueId,
       })));
     if (mappingError) redirectMessage('/questions', 'error', mappingError.message);
