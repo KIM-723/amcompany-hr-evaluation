@@ -1,6 +1,9 @@
-1. Supabase SQL Editor에서 015_step20_is_hr_admin_hotfix.sql 전체 실행
-2. 결과가
-   is_hr_admin_exists = true
-   service_role_execute = true
-   인지 확인
-3. 그 다음 기존 014_step7_20_validation.sql을 처음부터 다시 실행
+STEP 7~20 Build Hotfix #1
+
+1. GitHub 저장소 -> Add file -> Upload files
+2. 압축 안의 app 폴더를 업로드
+3. 기존 app/evaluations/first/actions.ts 갱신
+4. Commit message:
+   fix: first evaluation response null check
+5. Vercel 자동배포 확인
+6. 다음 Build Error가 나오면 그 첫 Error만 전달
