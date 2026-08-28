@@ -1,0 +1,21 @@
+AMCOMPANY 인사진단 STEP 5 적용
+
+1. 이 ZIP을 압축 해제합니다.
+2. 압축 푼 폴더 안의 app, components, config, docs, lib, supabase, types를
+   GitHub 저장소 루트에 Upload files로 업로드합니다.
+3. Commit message:
+   STEP 5 - employee and organization management
+4. Supabase SQL Editor에서 아래 순서로 실행합니다.
+   supabase/migrations/005_step5_employee_org_management.sql
+   supabase/migrations/006_step5_validation.sql
+5. Vercel 자동 배포가 Ready인지 확인합니다.
+6. FORCE_DEMO_LOGIN=true를 쓰는 동안에는
+   SUPABASE_SECRET_KEY 또는 SUPABASE_SERVICE_ROLE_KEY가 Vercel에 있어야
+   직원/조직 등록·수정이 실제 DB에 저장됩니다.
+
+테스트 주소:
+/employees
+/employees/new
+/organization
+/organization/job-levels
+/organization/positions
