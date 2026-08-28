@@ -1,36 +1,25 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 import { requireHrAdmin } from '@/lib/hr/admin';
 
-const rowSchema = z
-  .object({
-    employee_no: z.string().min(1),
-    name: z.string().min(1),
-    email: z.string().nullable(),
-    hire_date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, '입사일 형식 오류: YYYY-MM-DD 형식으로 입력해주세요.'),
-    resignation_date: z.string().nullable(),
-    employment_type: z.string().min(1),
-    employment_status: z.enum(['active', 'leave', 'resigned']),
-    department: z.string().nullable(),
-    job_level: z.string().nullable(),
-    position: z.string().nullable(),
-    leader_employee_no: z.string().nullable(),
-    is_leader: z.boolean(),
-    phone: z.string().nullable(),
-    notes: z.string().nullable(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.employment_status === 'resigned' && !value.resignation_date) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['resignation_date'], message: '퇴사자는 퇴사일이 필수입니다.' });
-    }
-    if (value.resignation_date && value.resignation_date < value.hire_date) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['resignation_date'], message: '퇴사일은 입사일보다 빠를 수 없습니다.' });
-    }
-  });
+type ImportRow = {
+  employee_no: string;
+  name: string;
+  email: string | null;
+  hire_date: string;
+  resignation_date: string | null;
+  employment_type: string;
+  employment_status: 'active' | 'leave' | 'resigned';
+  department: string | null;
+  job_level: string | null;
+  position: string | null;
+  leader_employee_no: string | null;
+  is_leader: boolean;
+  phone: string | null;
+  notes: string | null;
+};
+
 
 export type BulkImportResult = {
   ok: boolean;
@@ -40,7 +29,6 @@ export type BulkImportResult = {
   message: string;
 };
 
-type ImportRow = z.infer<typeof rowSchema>;
 
 
 function sleep(ms: number) {
@@ -75,6 +63,12 @@ async function withJwtFutureRetry<T extends { error?: unknown }>(
 
 function normalize(value: unknown) {
   if (value == null) return '';
+
+  // Excel numeric cells such as 202503102 are valid employee numbers.
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Number.isInteger(value) ? String(value) : String(value);
+  }
+
   return String(value).trim();
 }
 
@@ -139,6 +133,38 @@ function parseDate(value: unknown) {
   }
 
   return raw;
+}
+
+
+function validateRow(row: ImportRow): string | null {
+  if (!row.employee_no) return '사번이 비어 있습니다.';
+  if (!row.name) return '이름이 비어 있습니다.';
+  if (!row.hire_date) return '입사일이 비어 있습니다.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(row.hire_date)) {
+    return `입사일 형식 오류 (${row.hire_date}): YYYY-MM-DD 형식으로 입력해주세요.`;
+  }
+  if (!row.employment_type) return '고용형태가 비어 있습니다.';
+
+  if (row.employment_status === 'resigned' && !row.resignation_date) {
+    return '퇴사자는 퇴사일이 필수입니다.';
+  }
+
+  if (row.resignation_date) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.resignation_date)) {
+      return `퇴사일 형식 오류 (${row.resignation_date}): YYYY-MM-DD 형식으로 입력해주세요.`;
+    }
+    if (row.resignation_date < row.hire_date) {
+      return '퇴사일은 입사일보다 빠를 수 없습니다.';
+    }
+  }
+
+  // Numeric-looking employee numbers are allowed.
+  // They are stored as text in the DB to avoid numeric precision/format issues.
+  if (row.employee_no.length > 50) {
+    return '사번이 너무 깁니다. 50자 이하로 입력해주세요.';
+  }
+
+  return null;
 }
 
 function readRawRow(raw: Record<string, unknown>): ImportRow | null {
@@ -237,29 +263,17 @@ export async function bulkImportEmployees(rowsJson: string): Promise<BulkImportR
       return;
     }
 
-    const parsed = rowSchema.safeParse(converted);
-    if (!parsed.success) {
+    const validationError = validateRow(converted);
+    if (validationError) {
       errors.push({
         row: sourceRow,
         employee_no: converted.employee_no,
-        message: (() => {
-          const issue = parsed.error.issues[0];
-          if (!issue) return '필수값을 확인해주세요.';
-          if (issue.path?.[0] === 'hire_date') {
-            return `입사일 형식 오류 (${converted.hire_date || '빈값'}): YYYY-MM-DD 형식으로 입력해주세요.`;
-          }
-          if (issue.path?.[0] === 'resignation_date') {
-            return issue.message || '퇴사일 형식을 확인해주세요.';
-          }
-          return issue.message === 'Invalid'
-            ? `입력값 오류: ${String(issue.path?.[0] ?? '알 수 없는 항목')}`
-            : issue.message;
-        })(),
+        message: validationError,
       });
       return;
     }
 
-    const row = parsed.data;
+    const row = converted;
     const empKey = key(row.employee_no);
 
     if (duplicateInFile.has(empKey)) {
