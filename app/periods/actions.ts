@@ -439,3 +439,48 @@ export async function removeEvaluationTarget(periodId: string, assignmentId: str
   revalidatePath('/periods');
   redirect(messageUrl(`/periods/${periodId}`, 'success', '평가대상에서 제외했습니다.'));
 }
+export async function deleteEvaluationPeriodCompletely(
+  periodId: string,
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    const { supabase } = await requireHrAdmin();
+
+    const { data, error } = await supabase.rpc('delete_evaluation_period_completely', {
+      p_period_id: periodId,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    revalidatePath('/periods');
+    revalidatePath('/dashboard');
+    revalidatePath('/evaluations/self');
+    revalidatePath('/evaluations/first');
+    revalidatePath('/evaluations/second');
+    revalidatePath('/evaluations/results');
+    revalidatePath('/observations');
+    revalidatePath('/calibration');
+    revalidatePath('/nine-block');
+    revalidatePath('/growth-plans');
+    revalidatePath('/stats');
+
+    const periodName = data?.period_name ?? '평가기간';
+    const assignmentCount = data?.assignment_count ?? 0;
+
+    return {
+      ok: true,
+      message:
+        `${periodName} 영구삭제 완료 · 평가대상 ${assignmentCount}명과 ` +
+        '해당 기간의 진단/평가/결과/Calibration/History/연결 성장계획 데이터도 함께 삭제되었습니다.',
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : '평가기간 삭제 중 오류가 발생했습니다.',
+    };
+  }
+}

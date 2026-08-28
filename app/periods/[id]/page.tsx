@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Notice } from '@/components/hr/Notice';
 import { PeriodForm } from '@/components/evaluation-period/PeriodForm';
 import { PeriodStatusBadge } from '@/components/evaluation-period/PeriodStatusBadge';
+import { PeriodDeleteButton } from '@/components/evaluation-period/PeriodDeleteButton';
 import {
   activatePeriod,
   addEvaluationTargets,
@@ -342,6 +343,24 @@ export default async function PeriodDetailPage({ params, searchParams }: PagePro
           )}
         </div>
       </div>
+
+<Card className="border-red-200">
+  <div className="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h2 className="font-bold text-red-700">위험 영역 · 평가기간 영구삭제</h2>
+      <p className="mt-1 max-w-3xl text-sm text-slate-500">
+        평가기간을 삭제하면 이 기간에 속한 평가대상, 자기평가, 1·2차 평가,
+        평가응답, 결과, Calibration, History와 해당 평가결과에서 만들어진
+        성장계획까지 함께 삭제됩니다. 복구할 수 없습니다.
+      </p>
+    </div>
+    <PeriodDeleteButton
+      periodId={id}
+      periodName={period.name}
+      assignmentCount={assignments.length}
+    />
+  </div>
+</Card>
     </PageShell>
   );
 }

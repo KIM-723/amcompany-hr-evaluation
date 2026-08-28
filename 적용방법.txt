@@ -1,20 +1,36 @@
-숫자형 사번 / Invalid 오류 패치
+평가기간 영구삭제 패치
 
-1. GitHub -> app -> employees -> import -> actions.ts
-2. 기존 actions.ts를 이 파일로 교체
-3. Commit:
-   fix: accept numeric employee numbers in excel import
-4. Supabase SQL 실행 없음
-5. Vercel 자동배포 Ready 확인
-6. 같은 Excel 파일 다시 업로드
+중요: 새 화면이 새 DB Function을 호출하므로 SQL을 먼저 실행하세요.
 
-변경내용
-- 숫자형 사번 허용: 202503102 등
-- DB에는 문자열(text)로 저장
-- Zod의 모호한 Invalid 제거
-- 오류가 있으면 정확한 항목명 표시
-- 날짜 형식 확장 및 JWT future 자동재시도 유지
+[1] Supabase SQL Editor
+1. 018_evaluation_period_permanent_delete.sql 실행
+2. 성공 후 019_evaluation_period_delete_validation.sql 실행
 
-주의
-00123처럼 앞자리 0이 중요한 사번은 Excel 셀 서식을 '텍스트'로 해야
-앞의 0이 사라지지 않습니다.
+019 첫 결과:
+- period_delete_function = true
+- service_role_execute = true
+
+[2] GitHub
+ZIP 압축 해제
+GitHub -> Add file -> Upload files
+아래 폴더 업로드:
+- app
+- components
+- docs
+- supabase
+
+Commit:
+feat: permanent evaluation period deletion
+
+[3] Vercel
+자동배포 -> Ready
+
+[4] 테스트
+- 테스트용 평가기간 하나 생성
+- 평가대상 / 자기평가 / 1차평가 등 데이터 생성
+- 평가기간 상세 맨 아래 '평가기간 영구삭제'
+- 경고 확인 후 삭제
+- /periods에서 평가기간 사라짐 확인
+- 관련 평가데이터도 함께 사라졌는지 확인
+
+복구 불가 기능이므로 실제 데이터 삭제 전 반드시 평가기간명을 확인하세요.
