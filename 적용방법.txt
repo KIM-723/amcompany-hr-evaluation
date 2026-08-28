@@ -1,8 +1,13 @@
-STEP 7~20 Build Hotfix #2
+직원 Excel 일괄등록 패치
 
-1. GitHub -> app -> questions -> actions.ts
-2. 이 패치의 actions.ts로 기존 파일 교체
-3. Commit message:
-   fix: use non-null question id
-4. Supabase SQL 작업 없음
-5. Vercel 자동배포 확인
+1. ZIP 압축 해제
+2. GitHub -> Add file -> Upload files
+3. app / components / docs 폴더 전체 업로드
+4. Commit:
+   feat: employee excel bulk import
+5. Supabase SQL 실행 없음
+6. Vercel 자동배포 Ready 확인
+7. 직원관리 -> Excel 일괄등록 클릭
+8. Excel 양식 다운로드 -> 작성 -> 업로드 -> 일괄등록
+
+새 환경변수 없음.

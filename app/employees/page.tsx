@@ -53,7 +53,10 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Se
           <select name="job_level" defaultValue={jobLevelId} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"><option value="">전체 직급</option>{jobLevelOptions.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
           <select name="status" defaultValue={status} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"><option value="">전체 상태</option>{Object.entries(statusLabel).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>
           <button className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold">검색</button>
-          <Link href="/employees/new" className="rounded-xl bg-navy-900 px-4 py-2.5 text-center text-sm font-semibold text-white">+ 신규 등록</Link>
+          <div className="flex gap-2">
+            <Link href="/employees/import" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-center text-sm font-semibold text-emerald-800">Excel 일괄등록</Link>
+            <Link href="/employees/new" className="rounded-xl bg-navy-900 px-4 py-2.5 text-center text-sm font-semibold text-white">+ 신규 등록</Link>
+          </div>
         </form>
       </Card>
       <div className="flex items-center justify-between text-sm text-slate-500"><span>총 {employees.length}명</span><span>행을 클릭하면 상세정보를 수정할 수 있습니다.</span></div>
