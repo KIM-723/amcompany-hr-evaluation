@@ -8,7 +8,10 @@ import {
   analyzePeriodBatchAction,
 } from '@/app/diagnoses/ai-actions';
 import { alignmentLevel } from '@/lib/ai/core-value-analysis';
-import { firstRelation } from '@/lib/diagnosis/utils';
+import {
+  firstRelation,
+  diagnosisStatusLabel,
+} from '@/lib/diagnosis/utils';
 import { getEvaluationAccess } from '@/lib/evaluation/access';
 
 export const dynamic = 'force-dynamic';
@@ -32,8 +35,24 @@ function average(values: Array<number | null | undefined>) {
   );
 }
 
-function scoreText(value: number | null) {
-  return value === null ? '-' : String(value);
+function scoreText(value: number | null | undefined) {
+  return typeof value === 'number' ? String(value) : '-';
+}
+
+function statusTone(status: string) {
+  if (status === 'completed') {
+    return 'bg-emerald-50 text-emerald-700';
+  }
+
+  if (
+    status === 'department_head_in_progress' ||
+    status === 'department_head_completed' ||
+    status === 'headquarters_head_in_progress'
+  ) {
+    return 'bg-blue-50 text-blue-700';
+  }
+
+  return 'bg-slate-100 text-slate-700';
 }
 
 export default async function AICoreValueDashboardPage({
@@ -78,6 +97,8 @@ export default async function AICoreValueDashboardPage({
     (period: any) => period.id === selectedPeriodId,
   );
 
+  const requestedEmployee = param(sp.employee);
+
   const [
     { data: diagnosisData, error: diagnosisError },
     { data: analysisData, error: analysisError },
@@ -86,10 +107,9 @@ export default async function AICoreValueDashboardPage({
         supabase
           .from('personnel_diagnoses')
           .select(
-            'id,employee_id,status,updated_at,source_file_name,employees:employees!personnel_diagnoses_employee_id_fkey(name,employee_no,departments(name),positions(name))',
+            'id,employee_id,status,subject_is_department_head,updated_at,source_file_name,source_uploaded_at,diagnosis_summary,growth_points,growth_directions,other_comment,department_head_id,headquarters_head_id,employees:employees!personnel_diagnoses_employee_id_fkey(name,employee_no,departments(name),job_levels(name),positions(name))',
           )
           .eq('period_id', selectedPeriodId)
-          .eq('status', 'completed')
           .order('updated_at', { ascending: false }),
         supabase
           .from('core_value_ai_analyses')
@@ -105,6 +125,7 @@ export default async function AICoreValueDashboardPage({
 
   const diagnoses = (diagnosisData ?? []) as any[];
   const analyses = (analysisData ?? []) as any[];
+
   const analysisMap = new Map(
     analyses.map((analysis) => [analysis.diagnosis_id, analysis]),
   );
@@ -118,8 +139,44 @@ export default async function AICoreValueDashboardPage({
     return { diagnosis, analysis, stale };
   });
 
+  const employeeOptions = rows
+    .map(({ diagnosis }) => {
+      const employee = firstRelation(diagnosis.employees);
+      const department = firstRelation(employee?.departments);
+
+      return {
+        diagnosisId: diagnosis.id,
+        employeeId: diagnosis.employee_id,
+        employeeNo: employee?.employee_no ?? '',
+        name: employee?.name ?? '',
+        department: department?.name ?? '',
+      };
+    })
+    .sort((a, b) =>
+      `${a.department}${a.employeeNo}${a.name}`.localeCompare(
+        `${b.department}${b.employeeNo}${b.name}`,
+        'ko',
+      ),
+    );
+
+  const selectedEmployeeId =
+    employeeOptions.some((item) => item.employeeId === requestedEmployee)
+      ? requestedEmployee
+      : '';
+
+  const selectedRow = selectedEmployeeId
+    ? rows.find(
+        ({ diagnosis }) => diagnosis.employee_id === selectedEmployeeId,
+      ) ?? null
+    : null;
+
   const currentAnalyses = rows
-    .filter((row) => row.analysis && !row.stale)
+    .filter(
+      (row) =>
+        row.diagnosis.status === 'completed' &&
+        row.analysis &&
+        !row.stale,
+    )
     .map((row) => row.analysis);
 
   const growthAverage = average(
@@ -138,9 +195,17 @@ export default async function AICoreValueDashboardPage({
     currentAnalyses.map((row) => row.overall_alignment_score),
   );
 
-  const pendingCount = rows.filter(
+  const completedDiagnoses = rows.filter(
+    (row) => row.diagnosis.status === 'completed',
+  );
+
+  const inProgressDiagnoses = rows.filter(
+    (row) => row.diagnosis.status !== 'completed',
+  );
+
+  const pendingAI = completedDiagnoses.filter(
     (row) => !row.analysis || row.stale,
-  ).length;
+  );
 
   const distribution = {
     veryHigh: currentAnalyses.filter(
@@ -181,7 +246,13 @@ export default async function AICoreValueDashboardPage({
   >();
 
   for (const row of rows) {
-    if (!row.analysis || row.stale) continue;
+    if (
+      row.diagnosis.status !== 'completed' ||
+      !row.analysis ||
+      row.stale
+    ) {
+      continue;
+    }
 
     const employee = firstRelation(row.diagnosis.employees);
     const department = firstRelation(employee?.departments);
@@ -224,14 +295,25 @@ export default async function AICoreValueDashboardPage({
     );
 
   const apiConfigured = Boolean(process.env.OPENAI_API_KEY);
-  const returnTo = selectedPeriodId
-    ? `/diagnoses/ai-dashboard?period=${selectedPeriodId}`
-    : '/diagnoses/ai-dashboard';
+
+  const queryParams = new URLSearchParams();
+
+  if (selectedPeriodId) {
+    queryParams.set('period', selectedPeriodId);
+  }
+
+  if (selectedEmployeeId) {
+    queryParams.set('employee', selectedEmployeeId);
+  }
+
+  const returnTo = `/diagnoses/ai-dashboard${
+    queryParams.toString() ? `?${queryParams.toString()}` : ''
+  }`;
 
   return (
     <PageShell
       title="AI 핵심가치 Dashboard"
-      description="최종 인사진단을 AI가 성장·신뢰·전문성·감각 기준으로 근거 중심 분석한 조직 Alignment Dashboard입니다."
+      description="평가기간의 전체 인사진단 진행현황과 최종 진단의 성장·신뢰·전문성·감각 Alignment를 확인합니다."
     >
       <Notice
         success={param(sp.success)}
@@ -239,21 +321,19 @@ export default async function AICoreValueDashboardPage({
       />
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <b>육성용 보조지표:</b> AI 점수는 구성원 피드백과 성장지원용입니다.
-        보상·승진·징계·해고 등의 인사결정을 자동으로 결정하는 용도로 사용하지 않습니다.
-        근거가 부족한 핵심가치는 점수를 만들지 않고 <b>근거 부족</b>으로 표시합니다.
+        <b>육성용 보조지표:</b> 작성중 진단도 Dashboard에는 즉시 표시합니다.
+        AI 분석은 본부장 성장방향까지 포함해 최종 완료된 인사진단에만 실행합니다.
       </div>
 
       {!apiConfigured && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          AI 분석을 실행하려면 Vercel 환경변수에 <b>OPENAI_API_KEY</b>를
-          서버 전용으로 설정해야 합니다. `NEXT_PUBLIC_` 접두사는 붙이지 않습니다.
+          AI 분석을 실행하려면 Vercel 서버 환경변수 <b>OPENAI_API_KEY</b>가 필요합니다.
         </div>
       )}
 
       <Card>
-        <form method="get" className="flex flex-wrap items-end gap-3">
-          <label className="min-w-[280px] flex-1 text-sm font-semibold">
+        <form method="get" className="grid gap-4 xl:grid-cols-[1fr_1fr_auto] xl:items-end">
+          <label className="text-sm font-semibold">
             평가기간
             <select
               name="period"
@@ -268,7 +348,26 @@ export default async function AICoreValueDashboardPage({
             </select>
           </label>
 
-          <button className="rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold">
+          <label className="text-sm font-semibold">
+            직원 개별 조회
+            <select
+              name="employee"
+              defaultValue={selectedEmployeeId}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5"
+            >
+              <option value="">전체 직원</option>
+              {employeeOptions.map((employee) => (
+                <option
+                  key={employee.diagnosisId}
+                  value={employee.employeeId}
+                >
+                  {employee.employeeNo} · {employee.name} · {employee.department}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button className="rounded-xl border bg-white px-5 py-2.5 text-sm font-semibold">
             조회
           </button>
         </form>
@@ -284,65 +383,181 @@ export default async function AICoreValueDashboardPage({
         <>
           <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Card>
-              <div className="text-xs text-slate-500">최종 진단</div>
+              <div className="text-xs text-slate-500">등록된 진단</div>
               <div className="mt-1 text-2xl font-black">{rows.length}명</div>
             </Card>
             <Card>
-              <div className="text-xs text-slate-500">AI 분석 완료</div>
-              <div className="mt-1 text-2xl font-black">
-                {currentAnalyses.length}명
-              </div>
+              <div className="text-xs text-slate-500">작성 진행중</div>
+              <div className="mt-1 text-2xl font-black">{inProgressDiagnoses.length}명</div>
             </Card>
             <Card>
-              <div className="text-xs text-slate-500">분석/재분석 필요</div>
-              <div className="mt-1 text-2xl font-black">{pendingCount}명</div>
+              <div className="text-xs text-slate-500">최종 완료</div>
+              <div className="mt-1 text-2xl font-black">{completedDiagnoses.length}명</div>
+            </Card>
+            <Card>
+              <div className="text-xs text-slate-500">AI 분석 완료</div>
+              <div className="mt-1 text-2xl font-black">{currentAnalyses.length}명</div>
+            </Card>
+            <Card>
+              <div className="text-xs text-slate-500">AI 분석/재분석 필요</div>
+              <div className="mt-1 text-2xl font-black">{pendingAI.length}명</div>
             </Card>
             <Card>
               <div className="text-xs text-slate-500">조직 Alignment</div>
               <div className="mt-1 text-2xl font-black">
                 {overallAverage === null ? '-' : `${overallAverage}점`}
               </div>
-              <div className="mt-1 text-xs text-slate-500">
-                {alignmentLevel(overallAverage)}
-              </div>
-            </Card>
-            <Card>
-              <div className="text-xs text-slate-500">가장 강한 가치</div>
-              <div className="mt-1 text-lg font-black">
-                {[
-                  ['성장', growthAverage],
-                  ['신뢰', trustAverage],
-                  ['전문성', professionalismAverage],
-                  ['감각', senseAverage],
-                ]
-                  .filter((item) => typeof item[1] === 'number')
-                  .sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] ?? '-'}
-              </div>
-            </Card>
-            <Card>
-              <div className="text-xs text-slate-500">우선 성장 가치</div>
-              <div className="mt-1 text-lg font-black">
-                {[
-                  ['성장', growthAverage],
-                  ['신뢰', trustAverage],
-                  ['전문성', professionalismAverage],
-                  ['감각', senseAverage],
-                ]
-                  .filter((item) => typeof item[1] === 'number')
-                  .sort((a, b) => Number(a[1]) - Number(b[1]))[0]?.[0] ?? '-'}
-              </div>
+              <div className="mt-1 text-xs text-slate-500">{alignmentLevel(overallAverage)}</div>
             </Card>
           </div>
+
+          {selectedRow && (() => {
+            const employee = firstRelation(selectedRow.diagnosis.employees);
+            const department = firstRelation(employee?.departments);
+            const jobLevel = firstRelation(employee?.job_levels);
+            const position = firstRelation(employee?.positions);
+            const analysis = selectedRow.analysis;
+            const ready = selectedRow.diagnosis.status === 'completed';
+
+            return (
+              <Card className="border-blue-200">
+                <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-bold text-blue-700">직원 개별 조회</div>
+                    <h2 className="mt-1 text-xl font-black">
+                      {employee?.employee_no ?? '-'} · {employee?.name ?? '-'}
+                    </h2>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {department?.name ?? '-'} · {jobLevel?.name ?? '-'} · {position?.name ?? '-'}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone(
+                          selectedRow.diagnosis.status,
+                        )}`}
+                      >
+                        {diagnosisStatusLabel(
+                          selectedRow.diagnosis.status,
+                          selectedRow.diagnosis.subject_is_department_head,
+                        )}
+                      </span>
+
+                      {!analysis ? (
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">
+                          AI 분석 없음
+                        </span>
+                      ) : selectedRow.stale ? (
+                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                          AI 재분석 필요
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                          AI 분석 완료
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={`/diagnoses/${selectedRow.diagnosis.id}`}
+                      className="rounded-xl border px-4 py-2 text-sm font-semibold"
+                    >
+                      원본 인사진단
+                    </Link>
+
+                    {analysis && !selectedRow.stale && (
+                      <Link
+                        href={`/diagnoses/ai-dashboard/${selectedRow.diagnosis.id}`}
+                        className="rounded-xl bg-navy-900 px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        개인 AI Dashboard
+                      </Link>
+                    )}
+
+                    {ready && (
+                      <form
+                        action={analyzeDiagnosisAction.bind(
+                          null,
+                          selectedRow.diagnosis.id,
+                          returnTo,
+                        )}
+                      >
+                        <button
+                          disabled={!apiConfigured}
+                          className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                        >
+                          {!analysis
+                            ? 'AI 분석'
+                            : selectedRow.stale
+                              ? 'AI 재분석'
+                              : '다시 분석'}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+
+                {!ready ? (
+                  <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-700">
+                    아직 인사진단 최종완료 전입니다. 현재 내용은 <b>원본 인사진단</b>에서 확인할 수 있고,
+                    본부장 성장방향까지 완료되면 AI 핵심가치 분석이 가능합니다.
+                  </div>
+                ) : analysis && !selectedRow.stale ? (
+                  <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+                    <CoreValueRadar
+                      items={[
+                        { label: '성장', value: analysis.growth_score },
+                        { label: '신뢰', value: analysis.trust_score },
+                        { label: '전문성', value: analysis.professionalism_score },
+                        { label: '감각', value: analysis.sense_score },
+                      ]}
+                    />
+                    <div>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                        {[
+                          ['성장', analysis.growth_score],
+                          ['신뢰', analysis.trust_score],
+                          ['전문성', analysis.professionalism_score],
+                          ['감각', analysis.sense_score],
+                          ['종합', analysis.overall_alignment_score],
+                        ].map(([label, score]) => (
+                          <div key={String(label)} className="rounded-xl bg-slate-50 p-3 text-center">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="mt-1 text-2xl font-black">
+                              {scoreText(score as number | null)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="text-sm font-bold">AI 종합진단</div>
+                        <div className="mt-2 rounded-xl bg-blue-50 p-4 text-sm leading-7 text-slate-800">
+                          {analysis.overall_summary || '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-blue-50 p-5 text-sm text-blue-900">
+                    최종 인사진단은 완료되어 있습니다. <b>AI 분석</b>을 실행하면 이 직원의
+                    성장·신뢰·전문성·감각 점수와 판단근거를 확인할 수 있습니다.
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
 
           <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
             <Card>
               <div className="mb-2">
                 <h2 className="font-black">조직 핵심가치 평균</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  근거 부족으로 점수가 없는 항목은 평균에서 제외합니다.
+                  최종완료 + 최신 AI 분석이 있는 구성원만 평균에 포함됩니다.
                 </p>
               </div>
-
               <CoreValueRadar
                 items={[
                   { label: '성장', value: growthAverage },
@@ -351,22 +566,6 @@ export default async function AICoreValueDashboardPage({
                   { label: '감각', value: senseAverage },
                 ]}
               />
-
-              <div className="grid grid-cols-4 gap-2 text-center">
-                {[
-                  ['성장', growthAverage],
-                  ['신뢰', trustAverage],
-                  ['전문성', professionalismAverage],
-                  ['감각', senseAverage],
-                ].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-lg bg-slate-50 p-3">
-                    <div className="text-xs text-slate-500">{label}</div>
-                    <div className="mt-1 text-xl font-black">
-                      {typeof value === 'number' ? value : '-'}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </Card>
 
             <Card>
@@ -399,8 +598,7 @@ export default async function AICoreValueDashboardPage({
               <div>
                 <h2 className="font-black">AI 분석 실행</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  최종 완료된 진단 중 미분석 또는 진단 수정 후 재분석이 필요한
-                  구성원을 한 번에 최대 5명씩 분석합니다.
+                  최종완료된 진단 중 미분석 또는 재분석이 필요한 구성원만 분석합니다.
                 </p>
               </div>
 
@@ -413,12 +611,12 @@ export default async function AICoreValueDashboardPage({
                   )}
                 >
                   <button
-                    disabled={!apiConfigured || pendingCount === 0}
+                    disabled={!apiConfigured || pendingAI.length === 0}
                     className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {pendingCount > 0
-                      ? `미분석/재분석 ${Math.min(5, pendingCount)}명 AI 분석`
-                      : '모두 최신 분석'}
+                    {pendingAI.length > 0
+                      ? `미분석/재분석 ${Math.min(5, pendingAI.length)}명 AI 분석`
+                      : '최종완료 진단 모두 최신 분석'}
                   </button>
                 </form>
               )}
@@ -429,12 +627,11 @@ export default async function AICoreValueDashboardPage({
             <div className="border-b px-5 py-4">
               <h2 className="font-black">부서별 핵심가치 Alignment</h2>
             </div>
-
             <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
                   <th className="px-4 py-3 text-left">부서</th>
-                  <th className="px-4 py-3 text-right">인원</th>
+                  <th className="px-4 py-3 text-right">AI 분석인원</th>
                   <th className="px-4 py-3 text-right">성장</th>
                   <th className="px-4 py-3 text-right">신뢰</th>
                   <th className="px-4 py-3 text-right">전문성</th>
@@ -454,11 +651,10 @@ export default async function AICoreValueDashboardPage({
                     <td className="px-4 py-3 text-right font-black">{scoreText(row.overall)}</td>
                   </tr>
                 ))}
-
                 {departmentRows.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
-                      최신 AI 분석 데이터가 없습니다.
+                      아직 최신 AI 분석 데이터가 없습니다.
                     </td>
                   </tr>
                 )}
@@ -469,32 +665,42 @@ export default async function AICoreValueDashboardPage({
           <Card className="overflow-x-auto p-0">
             <div className="border-b px-5 py-4">
               <h2 className="font-black">
-                {selectedPeriod?.name ?? '평가기간'} · 개인 AI 분석 현황
+                {selectedPeriod?.name ?? '평가기간'} · 직원별 인사진단 / AI 현황
               </h2>
             </div>
 
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
                   <th className="px-4 py-3 text-left">구성원</th>
                   <th className="px-4 py-3 text-left">부서 / 직책</th>
+                  <th className="px-4 py-3 text-center">인사진단 상태</th>
                   <th className="px-4 py-3 text-right">성장</th>
                   <th className="px-4 py-3 text-right">신뢰</th>
                   <th className="px-4 py-3 text-right">전문성</th>
                   <th className="px-4 py-3 text-right">감각</th>
                   <th className="px-4 py-3 text-right">종합</th>
-                  <th className="px-4 py-3 text-center">상태</th>
+                  <th className="px-4 py-3 text-center">AI 상태</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
+
               <tbody>
                 {rows.map(({ diagnosis, analysis, stale }) => {
                   const employee = firstRelation(diagnosis.employees);
                   const department = firstRelation(employee?.departments);
                   const position = firstRelation(employee?.positions);
+                  const completed = diagnosis.status === 'completed';
 
                   return (
-                    <tr key={diagnosis.id} className="border-t">
+                    <tr
+                      key={diagnosis.id}
+                      className={
+                        selectedEmployeeId === diagnosis.employee_id
+                          ? 'border-t bg-blue-50/40'
+                          : 'border-t'
+                      }
+                    >
                       <td className="px-4 py-3">
                         <div className="font-semibold">
                           {employee?.employee_no ?? '-'} · {employee?.name ?? '-'}
@@ -502,6 +708,18 @@ export default async function AICoreValueDashboardPage({
                       </td>
                       <td className="px-4 py-3">
                         {department?.name ?? '-'} · {position?.name ?? '-'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-semibold ${statusTone(
+                            diagnosis.status,
+                          )}`}
+                        >
+                          {diagnosisStatusLabel(
+                            diagnosis.status,
+                            diagnosis.subject_is_department_head,
+                          )}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         {analysis && !stale ? scoreText(analysis.growth_score) : '-'}
@@ -521,8 +739,12 @@ export default async function AICoreValueDashboardPage({
                           : '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {!analysis ? (
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">
+                        {!completed ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            진단 완료 대기
+                          </span>
+                        ) : !analysis ? (
+                          <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
                             AI 분석 대기
                           </span>
                         ) : stale ? (
@@ -537,33 +759,49 @@ export default async function AICoreValueDashboardPage({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/diagnoses/ai-dashboard?period=${selectedPeriodId}&employee=${diagnosis.employee_id}`}
+                            className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                          >
+                            개별 조회
+                          </Link>
+
+                          <Link
+                            href={`/diagnoses/${diagnosis.id}`}
+                            className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                          >
+                            진단 보기
+                          </Link>
+
                           {analysis && !stale && (
                             <Link
                               href={`/diagnoses/ai-dashboard/${diagnosis.id}`}
-                              className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                              className="rounded-lg bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white"
                             >
-                              Dashboard
+                              AI Dashboard
                             </Link>
                           )}
 
-                          <form
-                            action={analyzeDiagnosisAction.bind(
-                              null,
-                              diagnosis.id,
-                              returnTo,
-                            )}
-                          >
-                            <button
-                              disabled={!apiConfigured}
-                              className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                          {completed && (
+                            <form
+                              action={analyzeDiagnosisAction.bind(
+                                null,
+                                diagnosis.id,
+                                returnTo,
+                              )}
                             >
-                              {!analysis
-                                ? 'AI 분석'
-                                : stale
-                                  ? '재분석'
-                                  : '다시 분석'}
-                            </button>
-                          </form>
+                              <button
+                                disabled={!apiConfigured}
+                                className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                              >
+                                {!analysis
+                                  ? 'AI 분석'
+                                  : stale
+                                    ? '재분석'
+                                    : '다시 분석'}
+                              </button>
+                            </form>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -572,8 +810,9 @@ export default async function AICoreValueDashboardPage({
 
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
-                      이 평가기간에서 최종 완료된 인사진단이 없습니다.
+                    <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
+                      이 평가기간에 등록된 인사진단이 없습니다.
+                      Excel 업로드 화면에서 해당 평가기간으로 정상 등록되었는지 확인해주세요.
                     </td>
                   </tr>
                 )}
