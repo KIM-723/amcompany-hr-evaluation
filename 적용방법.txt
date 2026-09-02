@@ -1,31 +1,143 @@
-인사진단 employees 관계 모호성 Hotfix
+AMCOMPANY AI 핵심가치 Dashboard 패치
 
-오류:
-Could not embed because more than one relationship was found for
-'personnel_diagnoses' and 'employees'
+추가기능:
+- 최종 인사진단 -> AI 핵심가치 분석
+- 성장 / 신뢰 / 전문성 / 감각 0~100
+- 근거 부족 시 점수 미생성
+- AI 신뢰도 / 판단근거 / 성장행동
+- 개인 Dashboard
+- 조직 Dashboard
+- 부서별 Dashboard
+- Alignment 분포
+- 진단 수정 시 '재분석 필요'
+- 재분석 이력 보존
+- 인사진단 메뉴에 'AI 핵심가치 Dashboard' 탭 추가
 
-원인:
-personnel_diagnoses 테이블이 employees를 여러 FK로 참조함:
-- employee_id
-- department_head_id
-- headquarters_head_id
-- source_uploaded_by
-- created_by
-- updated_by
+==================================================
+[1] GitHub 먼저
+==================================================
 
-그래서 Supabase/PostgREST가 단순 employees(...) 관계를 자동 선택할 수 없음.
+ZIP 압축 해제
 
-수정:
-평가대상 직원 관계를 아래 FK로 명시:
-employees!personnel_diagnoses_employee_id_fkey
+GitHub -> Add file -> Upload files
 
-적용:
-1. GitHub에 아래 3개 파일 교체
-   - app/diagnoses/page.tsx
-   - app/diagnoses/[id]/page.tsx
-   - app/diagnoses/results/page.tsx
-2. Commit:
-   fix: specify diagnosis subject employee relationship
-3. Supabase SQL 작업 없음
-4. Vercel Ready
-5. 인사진단 -> 진단 결과 다시 확인
+업로드:
+- app
+- components
+- config
+- lib
+- docs
+- supabase
+
+Commit:
+feat: add AI core value alignment dashboard
+
+==================================================
+[2] Supabase SQL
+==================================================
+
+034_ai_core_value_alignment.sql
+
+성공 후:
+
+035_ai_core_value_alignment_validation.sql
+
+035에서 확인:
+- ai_analysis_table = true
+- ai_analysis_history_table = true
+- service_role_ai_access = true
+- service_role_history_access = true
+
+==================================================
+[3] Vercel 환경변수
+==================================================
+
+Vercel
+-> Project
+-> Settings
+-> Environment Variables
+
+필수:
+
+Name:
+OPENAI_API_KEY
+
+Value:
+OpenAI API Key
+
+Environment:
+Production / Preview / Development 필요 환경 선택
+
+중요:
+NEXT_PUBLIC_OPENAI_API_KEY 로 만들면 안 됩니다.
+서버 전용 OPENAI_API_KEY 입니다.
+
+선택:
+
+OPENAI_MODEL
+gpt-5.6-terra
+
+OPENAI_REASONING_EFFORT
+medium
+
+한국 리전 API Endpoint를 사용하도록 OpenAI 프로젝트를 설정한 경우 선택:
+OPENAI_BASE_URL
+https://kr.api.openai.com/v1
+
+기본값은:
+https://api.openai.com/v1
+
+환경변수 저장 후 Redeploy.
+
+==================================================
+[4] 사용
+==================================================
+
+1. 인사진단 최종완료
+2. 인사진단 -> AI 핵심가치 Dashboard
+3. 평가기간 선택
+4. 개인 'AI 분석'
+   또는
+   '미분석/재분석 5명 AI 분석'
+5. 분석 완료 후:
+   - 조직 핵심가치 Radar
+   - 부서별 평균
+   - Alignment 분포
+   - 개인별 점수 확인
+6. 개인 Dashboard 버튼 클릭
+7. 핵심가치별 근거/신뢰도/성장행동 확인
+
+진단내용을 나중에 수정하면:
+AI 분석 상태 -> '재분석 필요'
+
+재분석하면 최신 진단으로 분석하고
+이전 AI 결과는 history 테이블에 보존됩니다.
+
+==================================================
+[5] 점수 기준
+==================================================
+
+90~100 매우 높은 Alignment
+75~89  안정적 Alignment
+60~74  기본 Alignment
+40~59  성장 필요
+0~39   집중 성장 필요
+
+단:
+근거 부족은 낮은 점수가 아닙니다.
+근거가 부족하면 점수 '-' / '근거 부족'으로 표시합니다.
+
+==================================================
+[6] 운영원칙
+==================================================
+
+이 AI 결과는 성장/육성/피드백용 보조자료입니다.
+
+점수 하나만으로:
+- 승진
+- 보상
+- 배치
+- 징계
+- 해고
+
+등의 인사결정을 자동화하지 않도록 설계했습니다.

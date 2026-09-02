@@ -69,6 +69,11 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
         roles: ALL_ROLES,
       },
       {
+        label: 'AI 핵심가치 Dashboard',
+        href: '/diagnoses/ai-dashboard',
+        roles: MANAGEMENT_ROLES,
+      },
+      {
         label: '진단 작성',
         href: '/diagnoses',
         roles: DIAGNOSIS_REVIEW_ROLES,
