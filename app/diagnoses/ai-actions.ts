@@ -233,3 +233,42 @@ export async function analyzePeriodBatchAction(
       : `${completed}명 AI 분석을 모두 완료했습니다.`,
   );
 }
+export type AIAnalysisProgressResult = {
+  ok: boolean;
+  message: string;
+};
+
+export async function analyzeDiagnosisProgressAction(
+  diagnosisId: string,
+): Promise<AIAnalysisProgressResult> {
+  const { supabase, user } = await getEvaluationAccess();
+
+  if (!isAdmin(user.roles)) {
+    return {
+      ok: false,
+      message: 'AI 분석은 HR 관리자만 실행할 수 있습니다.',
+    };
+  }
+
+  const actorId = await resolveActorEmployeeId(supabase, user);
+
+  try {
+    await analyzeAndSave(supabase, actorId, diagnosisId);
+
+    revalidatePath('/diagnoses/ai-dashboard');
+    revalidatePath(`/diagnoses/ai-dashboard/${diagnosisId}`);
+
+    return {
+      ok: true,
+      message: 'AI 핵심가치 분석을 완료했습니다.',
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'AI 분석 중 오류가 발생했습니다.',
+    };
+  }
+}

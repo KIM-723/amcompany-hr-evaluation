@@ -4,7 +4,7 @@ import { PageShell } from '@/components/ui/PageShell';
 import { Card } from '@/components/ui/Card';
 import { Notice } from '@/components/hr/Notice';
 import { CoreValueRadar } from '@/components/diagnosis/CoreValueRadar';
-import { analyzeDiagnosisAction } from '@/app/diagnoses/ai-actions';
+import { AIAnalysisProgressButton } from '@/components/diagnosis/AIAnalysisProgressButton';
 import {
   alignmentLevel,
   type CoreValueResult,
@@ -150,21 +150,15 @@ export default async function IndividualAIDashboardPage({
                 인사진단을 최종 완료한 뒤 AI 분석할 수 있습니다.
               </div>
             ) : (
-              <form
-                action={analyzeDiagnosisAction.bind(
-                  null,
-                  id,
-                  returnTo,
+              <div className="mt-5 flex justify-center">
+                {apiConfigured && (
+                  <AIAnalysisProgressButton
+                    diagnosisId={id}
+                    label={stale ? 'AI 재분석' : 'AI 핵심가치 분석'}
+                    className="w-full rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                  />
                 )}
-                className="mt-5"
-              >
-                <button
-                  disabled={!apiConfigured}
-                  className="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-                >
-                  {stale ? 'AI 재분석' : 'AI 핵심가치 분석'}
-                </button>
-              </form>
+              </div>
             )}
 
             {!apiConfigured && (
@@ -220,17 +214,11 @@ export default async function IndividualAIDashboardPage({
           >
             조직 Dashboard
           </Link>
-          <form
-            action={analyzeDiagnosisAction.bind(
-              null,
-              id,
-              returnTo,
-            )}
-          >
-            <button className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white">
-              다시 분석
-            </button>
-          </form>
+          <AIAnalysisProgressButton
+            diagnosisId={id}
+            label="다시 분석"
+            className="w-full rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          />
         </div>
       </div>
 
